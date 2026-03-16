@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../models/bike_state.dart';
+import 'owner_pin_setup_screen.dart';
 
 class ListYourBikeScreen extends StatefulWidget {
   const ListYourBikeScreen({super.key});
@@ -8,13 +10,18 @@ class ListYourBikeScreen extends StatefulWidget {
   State<ListYourBikeScreen> createState() => _ListYourBikeScreenState();
 }
 
-class _ListYourBikeScreenState extends State<ListYourBikeScreen> {
+class _ListYourBikeScreenState extends State<ListYourBikeScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
   final _formKey = GlobalKey<FormState>();
   final _bikeIdController = TextEditingController();
   String? _selectedStation;
   String? _selectedImageName;
   bool _submitting = false;
+  bool _isListedForRent = false;
+  bool _ownerPinSet = false;
   final _api = ApiService();
+  BikeStatus _bikeStatus = BikeStatus.docked;
 
   static const List<String> _stations = [
     'Academic Block A',
@@ -25,8 +32,20 @@ class _ListYourBikeScreenState extends State<ListYourBikeScreen> {
     'Admin Building',
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _bikeIdController.dispose();
+    super.dispose();
+  }
+
   Future<void> _pickImage() async {
-    // Simulate image pick
     setState(() => _selectedImageName = 'my_bike_photo.jpg');
   }
 
@@ -34,230 +53,546 @@ class _ListYourBikeScreenState extends State<ListYourBikeScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _submitting = true);
     try {
-      final success = await _api.submitBikeListing(
+      await _api.submitBikeListing(
         bikeId: _bikeIdController.text.trim(),
         station: _selectedStation!,
         imagePath: _selectedImageName,
       );
       if (!mounted) return;
-      if (success) {
-        showDialog(
-          context: context,
-          builder: (_) => AlertDialog(
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20)),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.check_circle_rounded,
-                    color: Color(0xFF2E7D32), size: 60),
-                const SizedBox(height: 16),
-                const Text(
-                  'Bike Listed!',
-                  style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF1B5E20)),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Your bike has been submitted for review. It will be listed once verified.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  Navigator.pop(context);
-                },
-                child: const Text('Done',
-                    style: TextStyle(color: Color(0xFF2E7D32))),
-              ),
-            ],
-          ),
-        );
-      }
+      _tabController.animateTo(1);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Bike submitted! Now set your Owner PIN and toggle listing.'),
+          backgroundColor: Color(0xFF2E7D32),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
   }
 
-  @override
-  void dispose() {
-    _bikeIdController.dispose();
-    super.dispose();
+  Future<void> _toggleRentListing(bool value) async {
+    if (value && !_ownerPinSet) {
+      final result = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => OwnerPinSetupScreen(
+            bikeId: _bikeIdController.text.isNotEmpty
+                ? _bikeIdController.text
+                : 'YOUR-BIKE',
+          ),
+        ),
+      );
+      if (result == true) {
+        setState(() {
+          _ownerPinSet = true;
+          _isListedForRent = true;
+        });
+      }
+    } else {
+      if (_bikeStatus == BikeStatus.reserved || _bikeStatus == BikeStatus.onRide) {
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Row(children: [
+              Icon(Icons.warning_rounded, color: Color(0xFFF9A825)),
+              SizedBox(width: 8),
+              Text('Cannot Unlist'),
+            ]),
+            content: const Text(
+                'A renter has already booked your bike. You cannot unlist it until the booking is completed.'),
+            actions: [
+              ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK')),
+            ],
+          ),
+        );
+        return;
+      }
+      setState(() => _isListedForRent = value);
+    }
+  }
+
+  Color _statusColor(BikeStatus s) {
+    switch (s) {
+      case BikeStatus.docked: return const Color(0xFF2E7D32);
+      case BikeStatus.reserved: return const Color(0xFFF9A825);
+      case BikeStatus.onRide: return const Color(0xFF1565C0);
+      case BikeStatus.unplugged: return const Color(0xFF9E9E9E);
+      case BikeStatus.ownerUse: return const Color(0xFF6A1B9A);
+    }
+  }
+
+  String _statusLabel(BikeStatus s) {
+    switch (s) {
+      case BikeStatus.docked: return 'Docked';
+      case BikeStatus.reserved: return 'Reserved';
+      case BikeStatus.onRide: return 'On Ride';
+      case BikeStatus.unplugged: return 'Unplugged';
+      case BikeStatus.ownerUse: return 'Owner Use';
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Scaffold(
       backgroundColor: const Color(0xFFF9FBF0),
       appBar: AppBar(
         title: const Text('List Your Bike'),
         backgroundColor: const Color(0xFF2E7D32),
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: Colors.white,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white60,
+          tabs: const [
+            Tab(text: 'Submit Bike'),
+            Tab(text: 'Manage Listing'),
+          ],
+        ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Info banner
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE8F5E9),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.info_outline_rounded,
-                        color: Color(0xFF2E7D32), size: 20),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'List your personal cycle on campus! Earn credits every time someone rents it.',
-                        style: TextStyle(
-                            color: Color(0xFF2E7D32), fontSize: 13),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          // Tab 1: Submit
+          SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                        color: const Color(0xFFE8F5E9),
+                        borderRadius: BorderRadius.circular(14)),
+                    child: const Row(children: [
+                      Icon(Icons.info_outline_rounded,
+                          color: Color(0xFF2E7D32), size: 20),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                            'List your personal cycle and earn money every time a student rents it!',
+                            style: TextStyle(
+                                color: Color(0xFF2E7D32), fontSize: 13)),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 28),
-              Text('Bike Details',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF1B5E20))),
-              const SizedBox(height: 16),
-              // Bike ID field
-              TextFormField(
-                controller: _bikeIdController,
-                textCapitalization: TextCapitalization.characters,
-                decoration: const InputDecoration(
-                  labelText: 'Bike ID / Name',
-                  hintText: 'e.g. MY-BIKE-001',
-                  prefixIcon: Icon(Icons.tag_rounded),
-                ),
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) {
-                    return 'Please enter a bike ID or name';
-                  }
-                  if (v.trim().length < 3) {
-                    return 'Minimum 3 characters';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              // Station dropdown
-              DropdownButtonFormField<String>(
-                value: _selectedStation,
-                decoration: const InputDecoration(
-                  labelText: 'Parking Stand Location',
-                  prefixIcon: Icon(Icons.location_on_rounded),
-                ),
-                items: _stations
-                    .map((s) => DropdownMenuItem(
-                          value: s,
-                          child: Text(s),
-                        ))
-                    .toList(),
-                onChanged: (v) => setState(() => _selectedStation = v),
-                validator: (v) =>
-                    v == null ? 'Please select a stand location' : null,
-              ),
-              const SizedBox(height: 24),
-              Text('Bike Photo',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF1B5E20))),
-              const SizedBox(height: 12),
-              // Image picker
-              GestureDetector(
-                onTap: _pickImage,
-                child: Container(
-                  width: double.infinity,
-                  height: 150,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: _selectedImageName != null
-                          ? const Color(0xFF2E7D32)
-                          : const Color(0xFFE0E0E0),
-                      width: _selectedImageName != null ? 2 : 1,
-                      style: BorderStyle.solid,
+                    ]),
+                  ),
+                  const SizedBox(height: 24),
+                  TextFormField(
+                    controller: _bikeIdController,
+                    textCapitalization: TextCapitalization.characters,
+                    decoration: const InputDecoration(
+                        labelText: 'Bike ID / Name',
+                        hintText: 'e.g. MY-BIKE-001',
+                        prefixIcon: Icon(Icons.tag_rounded)),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return 'Please enter a bike ID';
+                      if (v.trim().length < 3) return 'Minimum 3 characters';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: _selectedStation,
+                    decoration: const InputDecoration(
+                        labelText: 'Parking Stand Location',
+                        prefixIcon: Icon(Icons.location_on_rounded)),
+                    items: _stations
+                        .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                        .toList(),
+                    onChanged: (v) => setState(() => _selectedStation = v),
+                    validator: (v) => v == null ? 'Please select a location' : null,
+                  ),
+                  const SizedBox(height: 20),
+                  GestureDetector(
+                    onTap: _pickImage,
+                    child: Container(
+                      width: double.infinity,
+                      height: 130,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: _selectedImageName != null
+                              ? const Color(0xFF2E7D32)
+                              : const Color(0xFFE0E0E0),
+                          width: _selectedImageName != null ? 2 : 1,
+                        ),
+                      ),
+                      child: _selectedImageName == null
+                          ? const Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.add_photo_alternate_rounded,
+                                    color: Color(0xFFBDBDBD), size: 40),
+                                SizedBox(height: 8),
+                                Text('Tap to upload bike photo',
+                                    style: TextStyle(color: Color(0xFFBDBDBD))),
+                              ],
+                            )
+                          : Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.check_circle_rounded,
+                                    color: Color(0xFF2E7D32), size: 36),
+                                const SizedBox(height: 8),
+                                Text(_selectedImageName!,
+                                    style: const TextStyle(
+                                        color: Color(0xFF2E7D32),
+                                        fontWeight: FontWeight.w600)),
+                                const Text('Tap to change',
+                                    style: TextStyle(
+                                        color: Colors.grey, fontSize: 12)),
+                              ],
+                            ),
                     ),
                   ),
-                  child: _selectedImageName == null
-                      ? const Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                  const SizedBox(height: 20),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF8E1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFFFE082)),
+                    ),
+                    child: const Text(
+                      'By listing your bike, you agree to the IITGN Campus Bike Sharing terms.',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF795548)),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton.icon(
+                    onPressed: _submitting ? null : _submit,
+                    icon: _submitting
+                        ? const SizedBox(
+                            width: 20, height: 20,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2.5, color: Colors.white))
+                        : const Icon(Icons.upload_rounded),
+                    label: Text(_submitting ? 'Submitting...' : 'Submit Bike'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Tab 2: Manage
+          SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              children: [
+                // Bike status
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
                           children: [
-                            Icon(Icons.add_photo_alternate_rounded,
-                                color: Color(0xFFBDBDBD), size: 44),
-                            SizedBox(height: 8),
-                            Text('Tap to upload bike photo',
-                                style: TextStyle(
-                                    color: Color(0xFFBDBDBD), fontSize: 14)),
-                          ],
-                        )
-                      : Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.check_circle_rounded,
-                                color: Color(0xFF2E7D32), size: 40),
-                            const SizedBox(height: 8),
+                            const Icon(Icons.electric_bike_rounded,
+                                color: Color(0xFF2E7D32), size: 24),
+                            const SizedBox(width: 10),
                             Text(
-                              _selectedImageName!,
+                              _bikeIdController.text.isNotEmpty
+                                  ? _bikeIdController.text
+                                  : 'B201',
                               style: const TextStyle(
-                                color: Color(0xFF2E7D32),
-                                fontWeight: FontWeight.w600,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF1B5E20)),
+                            ),
+                            const Spacer(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: _statusColor(_bikeStatus).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 8, height: 8,
+                                    decoration: BoxDecoration(
+                                        color: _statusColor(_bikeStatus),
+                                        shape: BoxShape.circle),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    _statusLabel(_bikeStatus),
+                                    style: TextStyle(
+                                        color: _statusColor(_bikeStatus),
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 12),
+                                  ),
+                                ],
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            const Text('Tap to change',
-                                style: TextStyle(
-                                    color: Colors.grey, fontSize: 12)),
                           ],
                         ),
+                        const SizedBox(height: 8),
+                        Row(children: [
+                          const Icon(Icons.location_on_rounded,
+                              size: 14, color: Colors.grey),
+                          const SizedBox(width: 4),
+                          Text(_selectedStation ?? 'Academic Block A',
+                              style: const TextStyle(
+                                  color: Colors.grey, fontSize: 13)),
+                        ]),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 28),
-              // Terms
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF8E1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFFFE082)),
+                const SizedBox(height: 16),
+                // List for Rent toggle
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: _isListedForRent
+                                    ? const Color(0xFFE8F5E9)
+                                    : const Color(0xFFF5F5F5),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                _isListedForRent
+                                    ? Icons.visibility_rounded
+                                    : Icons.visibility_off_rounded,
+                                color: _isListedForRent
+                                    ? const Color(0xFF2E7D32)
+                                    : Colors.grey,
+                                size: 22,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('List for Rent',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 16,
+                                          color: Color(0xFF1B5E20))),
+                                  Text('Make your bike visible to renters',
+                                      style: TextStyle(
+                                          color: Colors.grey, fontSize: 12)),
+                                ],
+                              ),
+                            ),
+                            Switch(
+                              value: _isListedForRent,
+                              onChanged: _toggleRentListing,
+                              activeColor: const Color(0xFF2E7D32),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: _isListedForRent
+                                ? const Color(0xFFE8F5E9)
+                                : const Color(0xFFF5F5F5),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                _isListedForRent
+                                    ? Icons.check_circle_rounded
+                                    : Icons.visibility_off_rounded,
+                                color: _isListedForRent
+                                    ? const Color(0xFF2E7D32)
+                                    : Colors.grey,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _isListedForRent
+                                      ? 'Visible to renters. Earning 70% per rental.'
+                                      : 'Hidden from renters. Toggle ON to earn.',
+                                  style: TextStyle(
+                                      color: _isListedForRent
+                                          ? const Color(0xFF2E7D32)
+                                          : Colors.grey,
+                                      fontSize: 12),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                child: const Text(
-                  '⚠️ By listing your bike, you agree to the IITGN Campus Bike Sharing terms. Your bike must be road-worthy and equipped with functional brakes and a lock.',
-                  style:
-                      TextStyle(fontSize: 12, color: Color(0xFF795548)),
+                const SizedBox(height: 16),
+                // Owner PIN card
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: _ownerPinSet
+                                    ? const Color(0xFFEDE7F6)
+                                    : const Color(0xFFF5F5F5),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(Icons.lock_person_rounded,
+                                  color: _ownerPinSet
+                                      ? const Color(0xFF6A1B9A)
+                                      : Colors.grey,
+                                  size: 22),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('Owner PIN',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 16,
+                                          color: Color(0xFF1B5E20))),
+                                  Text(
+                                    _ownerPinSet
+                                        ? 'Set — unlock your bike anytime'
+                                        : 'Not set — required before listing',
+                                    style: TextStyle(
+                                        color: _ownerPinSet
+                                            ? const Color(0xFF6A1B9A)
+                                            : Colors.grey,
+                                        fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () async {
+                                final result = await Navigator.push<bool>(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => OwnerPinSetupScreen(
+                                      bikeId: _bikeIdController.text.isNotEmpty
+                                          ? _bikeIdController.text
+                                          : 'B201',
+                                      isChangingPin: _ownerPinSet,
+                                    ),
+                                  ),
+                                );
+                                if (result == true) {
+                                  setState(() => _ownerPinSet = true);
+                                }
+                              },
+                              child: Text(
+                                _ownerPinSet ? 'Change' : 'Set PIN',
+                                style: const TextStyle(
+                                    color: Color(0xFF6A1B9A),
+                                    fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (!_ownerPinSet) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF8E1),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: const Color(0xFFFFE082)),
+                            ),
+                            child: const Row(children: [
+                              Icon(Icons.warning_amber_rounded,
+                                  color: Color(0xFFF9A825), size: 16),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Set your Owner PIN so you can always access your own bike, even when listed for rent.',
+                                  style: TextStyle(
+                                      color: Color(0xFF795548), fontSize: 12),
+                                ),
+                              ),
+                            ]),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton.icon(
-                onPressed: _submitting ? null : _submit,
-                icon: _submitting
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2.5, color: Colors.white))
-                    : const Icon(Icons.upload_rounded),
-                label: Text(_submitting ? 'Submitting…' : 'Submit Bike'),
-              ),
-            ],
+                const SizedBox(height: 16),
+                // Status guide
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Bike Status Guide',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15,
+                                color: Color(0xFF1B5E20))),
+                        const SizedBox(height: 14),
+                        _StateRow(color: const Color(0xFF2E7D32), label: 'Docked', desc: 'At stand, ready to rent'),
+                        _StateRow(color: const Color(0xFFF9A825), label: 'Reserved', desc: 'Renter booked, OTP sent to lock'),
+                        _StateRow(color: const Color(0xFF1565C0), label: 'On Ride', desc: 'OTP entered, billing running'),
+                        _StateRow(color: const Color(0xFF9E9E9E), label: 'Unplugged', desc: 'Wire pulled, not yet unlocked'),
+                        _StateRow(color: const Color(0xFF6A1B9A), label: 'Owner Use', desc: 'You unlocked with owner PIN'),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StateRow extends StatelessWidget {
+  final Color color;
+  final String label;
+  final String desc;
+
+  const _StateRow({required this.color, required this.label, required this.desc});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Container(
+              width: 12, height: 12,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          const SizedBox(width: 10),
+          Text(label,
+              style: TextStyle(
+                  fontWeight: FontWeight.w600, color: color, fontSize: 13)),
+          const SizedBox(width: 8),
+          Text('— $desc',
+              style: const TextStyle(color: Colors.grey, fontSize: 12)),
+        ],
       ),
     );
   }

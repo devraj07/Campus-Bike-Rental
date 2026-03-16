@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'ride_history_screen.dart';
 import 'list_your_bike_screen.dart';
+import 'owner_rental_history_screen.dart';
 import 'login_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
@@ -124,9 +125,22 @@ class ProfileScreen extends StatelessWidget {
                     ),
                     const Divider(height: 1, indent: 56),
                     _MenuItem(
+                      icon: Icons.currency_rupee_rounded,
+                      label: 'My Bike Earnings',
+                      iconColor: const Color(0xFF6A1B9A),
+                      subtitle: 'View rentals & withdraw earnings',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) =>
+                                const OwnerRentalHistoryScreen()),
+                      ),
+                    ),
+                    const Divider(height: 1, indent: 56),
+                    _MenuItem(
                       icon: Icons.account_balance_wallet_rounded,
                       label: 'Campus Wallet',
-                      iconColor: const Color(0xFF6A1B9A),
+                      iconColor: const Color(0xFF00838F),
                       subtitle: 'Balance: ₹120.00',
                       onTap: () {},
                     ),

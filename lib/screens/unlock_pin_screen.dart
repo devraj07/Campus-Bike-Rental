@@ -34,12 +34,13 @@ class _UnlockPinScreenState extends State<UnlockPinScreen>
     _currentPin = widget.pin;
     _startTimer();
     _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    )..repeat(reverse: true);
-    _pulseAnim = Tween<double>(begin: 0.97, end: 1.03).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
+        vsync: this,
+        duration: const Duration(milliseconds: 1000),
+        lowerBound: 0.95,
+        upperBound: 1.05)
+      ..repeat(reverse: true);
+    _pulseAnim = CurvedAnimation(
+        parent: _pulseController, curve: Curves.easeInOut);
   }
 
   void _startTimer() {
@@ -69,6 +70,12 @@ class _UnlockPinScreenState extends State<UnlockPinScreen>
     super.dispose();
   }
 
+  String get _timerColor {
+    if (_seconds > 30) return '#2E7D32';
+    if (_seconds > 10) return '#FFA000';
+    return '#D32F2F';
+  }
+
   Color get _timerColorValue {
     if (_seconds > 30) return const Color(0xFF2E7D32);
     if (_seconds > 10) return const Color(0xFFFFA000);
@@ -77,6 +84,7 @@ class _UnlockPinScreenState extends State<UnlockPinScreen>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
       backgroundColor: const Color(0xFFF9FBF0),
       appBar: AppBar(
@@ -88,6 +96,7 @@ class _UnlockPinScreenState extends State<UnlockPinScreen>
         child: Column(
           children: [
             const SizedBox(height: 12),
+            // Bike info banner
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -116,19 +125,21 @@ class _UnlockPinScreenState extends State<UnlockPinScreen>
               ),
             ),
             const SizedBox(height: 32),
-            const Text('Your Unlock PIN',
-                style: TextStyle(color: Colors.grey, fontSize: 15)),
+            // PIN display
+            Text(
+              'Your Unlock PIN',
+              style: theme.textTheme.titleMedium?.copyWith(
+                  color: Colors.grey[600], fontWeight: FontWeight.w500),
+            ),
             const SizedBox(height: 16),
             ScaleTransition(
               scale: _pulseAnim,
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 36, vertical: 24),
+                padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 24),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                      color: const Color(0xFF2E7D32), width: 2.5),
+                  border: Border.all(color: const Color(0xFF2E7D32), width: 2.5),
                   boxShadow: [
                     BoxShadow(
                       color: const Color(0xFF2E7D32).withOpacity(0.15),
@@ -142,18 +153,22 @@ class _UnlockPinScreenState extends State<UnlockPinScreen>
                   children: _currentPin.split('').map((d) {
                     return Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Text(d,
-                          style: const TextStyle(
-                              fontSize: 48,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF1B5E20),
-                              letterSpacing: 4)),
+                      child: Text(
+                        d,
+                        style: const TextStyle(
+                          fontSize: 48,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF1B5E20),
+                          letterSpacing: 4,
+                        ),
+                      ),
                     );
                   }).toList(),
                 ),
               ),
             ),
             const SizedBox(height: 24),
+            // Instruction
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -179,30 +194,38 @@ class _UnlockPinScreenState extends State<UnlockPinScreen>
               ),
             ),
             const SizedBox(height: 28),
-            const Text('PIN expires in',
-                style: TextStyle(color: Colors.grey)),
+            // Timer
+            Text('PIN expires in', style: TextStyle(color: Colors.grey[600])),
             const SizedBox(height: 8),
-            SizedBox(
-              width: 80,
-              height: 80,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  CircularProgressIndicator(
-                    value: _seconds / 60.0,
-                    strokeWidth: 6,
-                    color: _timerColorValue,
-                    backgroundColor: Colors.grey[200],
-                  ),
-                  Text('',
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 1.0, end: _seconds / 60.0),
+              duration: const Duration(milliseconds: 200),
+              builder: (_, val, __) => SizedBox(
+                width: 80,
+                height: 80,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    CircularProgressIndicator(
+                      value: val,
+                      strokeWidth: 6,
+                      color: _timerColorValue,
+                      backgroundColor: Colors.grey[200],
+                    ),
+                    Text(
+                      '$_seconds',
                       style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800,
-                          color: _timerColorValue)),
-                ],
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                        color: _timerColorValue,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 28),
+            // Regenerate
             OutlinedButton.icon(
               onPressed: _regeneratePin,
               icon: const Icon(Icons.refresh_rounded),
@@ -216,22 +239,53 @@ class _UnlockPinScreenState extends State<UnlockPinScreen>
               ),
             ),
             const SizedBox(height: 14),
+            // Billing starts ONLY after PIN entered on physical keypad
             ElevatedButton.icon(
               onPressed: () {
-                _timer?.cancel();
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ActiveRideScreen(
-                      bike: widget.bike,
-                      rideId: widget.rideId,
-                      startTime: DateTime.now(),
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (_) => AlertDialog(
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20)),
+                    title: const Row(children: [
+                      Icon(Icons.lock_open_rounded,
+                          color: Color(0xFF2E7D32)),
+                      SizedBox(width: 8),
+                      Text('Confirm Unlock'),
+                    ]),
+                    content: const Text(
+                      'Have you entered the PIN on the bicycle lock keypad and heard the click?\n\nBilling starts only after you confirm the lock is physically open.',
                     ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Not Yet',
+                            style: TextStyle(color: Colors.grey)),
+                      ),
+                      ElevatedButton(
+                        onPressed: () {
+                          _timer?.cancel();
+                          Navigator.pop(context);
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ActiveRideScreen(
+                                bike: widget.bike,
+                                rideId: widget.rideId,
+                                startTime: DateTime.now(),
+                              ),
+                            ),
+                          );
+                        },
+                        child: const Text('Yes, Start Billing'),
+                      ),
+                    ],
                   ),
                 );
               },
               icon: const Icon(Icons.check_circle_outline_rounded),
-              label: const Text('Bike Unlocked - Start Ride'),
+              label: const Text('Bike Unlocked – Start Ride'),
             ),
           ],
         ),

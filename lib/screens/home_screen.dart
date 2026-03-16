@@ -3,7 +3,7 @@ import '../models/bike.dart';
 import '../services/api_service.dart';
 import '../widgets/bike_card.dart';
 import 'bike_details_screen.dart';
-import 'map_screen.dart';
+import 'stand_availability_screen.dart';
 import 'ride_history_screen.dart';
 import 'profile_screen.dart';
 import 'my_bike_screen.dart';
@@ -19,7 +19,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
   final List<Widget> _screens = [
     const _HomeTab(),
-    const MapScreen(),
+    const StandAvailabilityScreen(),
     const RideHistoryScreen(),
     const MyBikeScreen(),
     const ProfileScreen(),
@@ -143,7 +143,7 @@ class _HomeTabState extends State<_HomeTab> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Hi, Devraj Rawat 👋',
+                                'Hi, Devraj Rawat ',
                                 style: theme.textTheme.titleLarge?.copyWith(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w700,
@@ -193,6 +193,7 @@ class _HomeTabState extends State<_HomeTab> {
               ),
             ),
           ),
+          // Stats row
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -204,15 +205,16 @@ class _HomeTabState extends State<_HomeTab> {
                     color: const Color(0xFF2E7D32),
                   ),
                   const SizedBox(width: 10),
-                  const _StatChip(
+                  _StatChip(
                     icon: Icons.location_on_rounded,
                     label: '6 Stations',
-                    color: Color(0xFF1565C0),
+                    color: const Color(0xFF1565C0),
                   ),
                 ],
               ),
             ),
           ),
+          // Section title
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             sliver: SliverToBoxAdapter(
@@ -225,6 +227,7 @@ class _HomeTabState extends State<_HomeTab> {
               ),
             ),
           ),
+          // Bike list
           _isLoading
               ? const SliverFillRemaining(
                   child: Center(
@@ -281,7 +284,10 @@ class _StatChip extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-                color: color, fontWeight: FontWeight.w600, fontSize: 13),
+              color: color,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
           ),
         ],
       ),
