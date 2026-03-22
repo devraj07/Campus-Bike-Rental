@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/bike_state.dart';
 import '../models/bike.dart';
+import '../services/api_service.dart';
 import 'bike_details_screen.dart';
 
 class StandAvailabilityScreen extends StatefulWidget {
@@ -12,17 +13,19 @@ class StandAvailabilityScreen extends StatefulWidget {
 }
 
 class _StandAvailabilityScreenState extends State<StandAvailabilityScreen> {
-  final List<StandAvailability> _stands = StandAvailability.sampleStands();
-  bool _loading = false;
+  late Future<List<StandAvailability>> _standsFuture;
 
-  Future<void> _refresh() async {
-    setState(() => _loading = true);
-    await Future.delayed(const Duration(milliseconds: 800));
-    setState(() => _loading = false);
+  @override
+  void initState() {
+    super.initState();
+    _standsFuture = ApiService().fetchStands();
   }
 
-  int get _totalAvailable =>
-      _stands.fold(0, (sum, s) => sum + s.availableBikes);
+  void _refresh() {
+    setState(() {
+      _standsFuture = ApiService().fetchStands();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,179 +44,201 @@ class _StandAvailabilityScreenState extends State<StandAvailabilityScreen> {
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _refresh,
-        color: const Color(0xFF2E7D32),
-        child: CustomScrollView(
-          slivers: [
-            // Summary banner
-            SliverToBoxAdapter(
-              child: Container(
-                margin: const EdgeInsets.all(16),
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF1B5E20), Color(0xFF2E7D32)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _SummaryItem(
-                      icon: Icons.pedal_bike_rounded,
-                      value: '$_totalAvailable',
-                      label: 'Bikes Available',
-                    ),
-                    Container(width: 1, height: 40, color: Colors.white24),
-                    _SummaryItem(
-                      icon: Icons.location_on_rounded,
-                      value: '${_stands.length}',
-                      label: 'Total Stands',
-                    ),
-                    Container(width: 1, height: 40, color: Colors.white24),
-                    _SummaryItem(
-                      icon: Icons.check_circle_rounded,
-                      value:
-                          '${_stands.where((s) => s.availableBikes > 0).length}',
-                      label: 'Active Stands',
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            // Info box
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE3F2FD),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF90CAF9)),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.info_outline_rounded,
-                          color: Color(0xFF1565C0), size: 18),
-                      SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Walk to a nearby stand and scan the QR on any available bike to start your ride.',
-                          style: TextStyle(
-                              fontSize: 12, color: Color(0xFF1565C0)),
-                        ),
+      body: FutureBuilder<List<StandAvailability>>(
+        future: _standsFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(color: Color(0xFF2E7D32)),
+            );
+          }
+          if (snapshot.hasError) {
+            return Center(
+              child: Text('Failed to load stands: ${snapshot.error}'),
+            );
+          }
+
+          final stands = snapshot.data!;
+          final totalAvailable =
+              stands.fold(0, (sum, s) => sum + s.availableBikes);
+
+          return RefreshIndicator(
+            onRefresh: () async => _refresh(),
+            color: const Color(0xFF2E7D32),
+            child: CustomScrollView(
+              slivers: [
+                // Summary banner
+                SliverToBoxAdapter(
+                  child: Container(
+                    margin: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF1B5E20), Color(0xFF2E7D32)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                    ],
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _SummaryItem(
+                          icon: Icons.pedal_bike_rounded,
+                          value: '$totalAvailable',
+                          label: 'Bikes Available',
+                        ),
+                        Container(width: 1, height: 40, color: Colors.white24),
+                        _SummaryItem(
+                          icon: Icons.location_on_rounded,
+                          value: '${stands.length}',
+                          label: 'Total Stands',
+                        ),
+                        Container(width: 1, height: 40, color: Colors.white24),
+                        _SummaryItem(
+                          icon: Icons.check_circle_rounded,
+                          value:
+                              '${stands.where((s) => s.availableBikes > 0).length}',
+                          label: 'Active Stands',
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: 16)),
-            // Section header
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              sliver: SliverToBoxAdapter(
-                child: Text(
-                  'All Stands',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF1B5E20)),
+                // Info box
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE3F2FD),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF90CAF9)),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.info_outline_rounded,
+                              color: Color(0xFF1565C0), size: 18),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Walk to a nearby stand and scan the QR on any available bike to start your ride.',
+                              style: TextStyle(
+                                  fontSize: 12, color: Color(0xFF1565C0)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: 10)),
-            // Stand list
-            SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (ctx, i) => _StandCard(
-                  stand: _stands[i],
-                  onTap: () => _showStandDetail(context, _stands[i]),
-                ),
-                childCount: _stands.length,
-              ),
-            ),
-            // Campus map image placeholder
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Campus Stand Locations',
+                const SliverToBoxAdapter(child: SizedBox(height: 16)),
+                // Section header
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  sliver: SliverToBoxAdapter(
+                    child: Text(
+                      'All Stands',
                       style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w700,
                           color: const Color(0xFF1B5E20)),
                     ),
-                    const SizedBox(height: 12),
-                    Container(
-                      height: 200,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE8F5E9),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFC8E6C9)),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: Stack(
-                          children: [
-                            // Static campus map placeholder
-                            CustomPaint(
-                              size: const Size(double.infinity, 200),
-                              painter: _StaticCampusMap(),
-                            ),
-                            // Stand dots
-                            ..._buildStandDots(),
-                            // Legend
-                            Positioned(
-                              bottom: 12,
-                              right: 12,
-                              child: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.9),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    _LegendDot(
-                                        color: Color(0xFF2E7D32),
-                                        label: 'Has bikes'),
-                                    SizedBox(height: 4),
-                                    _LegendDot(
-                                        color: Color(0xFFD32F2F),
-                                        label: 'Empty'),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Static campus map — stands are at fixed locations',
-                      style: TextStyle(color: Colors.grey, fontSize: 11),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+                const SliverToBoxAdapter(child: SizedBox(height: 10)),
+                // Stand list
+                SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (ctx, i) => _StandCard(
+                      stand: stands[i],
+                      onTap: () => _showStandDetail(context, stands[i]),
+                    ),
+                    childCount: stands.length,
+                  ),
+                ),
+                // Campus map image placeholder
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Campus Stand Locations',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF1B5E20)),
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          height: 200,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE8F5E9),
+                            borderRadius: BorderRadius.circular(16),
+                            border:
+                                Border.all(color: const Color(0xFFC8E6C9)),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: Stack(
+                              children: [
+                                // Static campus map placeholder
+                                CustomPaint(
+                                  size: const Size(double.infinity, 200),
+                                  painter: _StaticCampusMap(),
+                                ),
+                                // Stand dots
+                                ..._buildStandDots(stands),
+                                // Legend
+                                Positioned(
+                                  bottom: 12,
+                                  right: 12,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.9),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        _LegendDot(
+                                            color: Color(0xFF2E7D32),
+                                            label: 'Has bikes'),
+                                        SizedBox(height: 4),
+                                        _LegendDot(
+                                            color: Color(0xFFD32F2F),
+                                            label: 'Empty'),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Static campus map — stands are at fixed locations',
+                          style: TextStyle(color: Colors.grey, fontSize: 11),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 20)),
+              ],
             ),
-            const SliverToBoxAdapter(child: SizedBox(height: 20)),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
 
-  List<Widget> _buildStandDots() {
+  List<Widget> _buildStandDots(List<StandAvailability> stands) {
     final positions = [
       [0.25, 0.3],
       [0.45, 0.55],
@@ -222,8 +247,8 @@ class _StandAvailabilityScreenState extends State<StandAvailabilityScreen> {
       [0.8, 0.75],
       [0.55, 0.85],
     ];
-    return List.generate(_stands.length, (i) {
-      final stand = _stands[i];
+    return List.generate(stands.length, (i) {
+      final stand = stands[i];
       final pos = positions[i];
       return LayoutBuilder(builder: (ctx, constraints) {
         return Positioned(
