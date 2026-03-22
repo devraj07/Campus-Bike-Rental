@@ -224,16 +224,11 @@ class _StartRideButtonState extends State<_StartRideButton> {
   Future<void> _start() async {
     setState(() => _loading = true);
     try {
-      final result = await _api.startRide(widget.bike.id);
       if (!mounted) return;
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => UnlockPinScreen(
-            bike: widget.bike,
-            pin: result['pin'] as String,
-            rideId: result['rideId'] as String,
-          ),
+          builder: (_) => UnlockPinScreen(bike: widget.bike),
         ),
       );
     } finally {

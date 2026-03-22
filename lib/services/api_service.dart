@@ -67,6 +67,15 @@ class ApiService {
     return true;
   }
 
+  Future<Map<String, dynamic>> startRental(String bikeId, String pin) async {
+    await _delay();
+    return {
+      'rideId': 'RD-${DateTime.now().millisecondsSinceEpoch}',
+      'pin': pin,
+      'startTime': DateTime.now().toIso8601String(),
+    };
+  }
+
   Future<List<StandAvailability>> fetchStands() async {
     await _delay();
     return StandAvailability.sampleStands();
