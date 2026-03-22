@@ -1,4 +1,5 @@
 import '../models/bike.dart';
+import '../models/bike_rental_record.dart';
 import '../models/bike_state.dart';
 import '../models/ride.dart';
 import '../utils/code_generator.dart';
@@ -79,6 +80,11 @@ class ApiService {
   Future<List<StandAvailability>> fetchStands() async {
     await _delay();
     return StandAvailability.sampleStands();
+  }
+
+  Future<List<BikeRentalRecord>> fetchRentalHistory(String userId) async {
+    await _delay();
+    return BikeRentalRecord.sampleRecords();
   }
 
   Future<Map<String, dynamic>> fetchUserProfile(String userId) async {

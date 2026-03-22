@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/bike_rental_record.dart';
+import '../services/api_service.dart';
 
 class OwnerRentalHistoryScreen extends StatefulWidget {
   const OwnerRentalHistoryScreen({super.key});
@@ -11,14 +12,13 @@ class OwnerRentalHistoryScreen extends StatefulWidget {
 }
 
 class _OwnerRentalHistoryScreenState extends State<OwnerRentalHistoryScreen> {
-  final List<BikeRentalRecord> _records = BikeRentalRecord.sampleRecords();
+  late Future<List<BikeRentalRecord>> _historyFuture;
   bool _withdrawing = false;
-  late OwnerEarnings _earnings;
 
   @override
   void initState() {
     super.initState();
-    _earnings = OwnerEarnings.fromRecords(_records);
+    _historyFuture = ApiService().fetchRentalHistory('USR-001');
   }
 
   String _formatDuration(Duration d) {
@@ -26,7 +26,7 @@ class _OwnerRentalHistoryScreenState extends State<OwnerRentalHistoryScreen> {
     return '${d.inMinutes} min';
   }
 
-  Future<void> _withdraw() async {
+  Future<void> _withdraw(double pendingAmount) async {
     setState(() => _withdrawing = true);
     await Future.delayed(const Duration(seconds: 2));
     if (!mounted) return;
@@ -48,7 +48,7 @@ class _OwnerRentalHistoryScreenState extends State<OwnerRentalHistoryScreen> {
                     color: Color(0xFF1B5E20))),
             const SizedBox(height: 8),
             Text(
-              '₹${_earnings.pendingWithdrawal.toStringAsFixed(0)} will be credited to your UPI in 24 hours.',
+              '₹${pendingAmount.toStringAsFixed(0)} will be credited to your UPI in 24 hours.',
               textAlign: TextAlign.center,
               style: const TextStyle(color: Colors.grey, fontSize: 13),
             ),
@@ -74,169 +74,196 @@ class _OwnerRentalHistoryScreenState extends State<OwnerRentalHistoryScreen> {
         title: const Text('My Bike Earnings'),
         backgroundColor: const Color(0xFF2E7D32),
       ),
-      body: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(22),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF1B5E20), Color(0xFF388E3C)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF2E7D32).withOpacity(0.3),
-                          blurRadius: 16,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.electric_bike_rounded,
-                                color: Colors.white70, size: 18),
-                            SizedBox(width: 8),
-                            Text('Bike B201 • Academic Block A',
-                                style: TextStyle(
-                                    color: Colors.white70, fontSize: 13)),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: [
-                            _EarningsStat(
-                                label: 'Total Rentals',
-                                value: '${_earnings.totalRentals}',
-                                icon: Icons.people_rounded),
-                            Container(
-                                width: 1, height: 50, color: Colors.white24),
-                            _EarningsStat(
-                                label: 'Total Earned',
-                                value:
-                                    '₹${_earnings.totalEarnings.toStringAsFixed(0)}',
-                                icon: Icons.currency_rupee_rounded),
-                            Container(
-                                width: 1, height: 50, color: Colors.white24),
-                            _EarningsStat(
-                                label: 'Withdrawn',
-                                value:
-                                    '₹${_earnings.withdrawn.toStringAsFixed(0)}',
-                                icon: Icons.account_balance_rounded),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text('Available to Withdraw',
-                                  style: TextStyle(
-                                      color: Colors.white70, fontSize: 13)),
-                              Text(
-                                '₹${_earnings.pendingWithdrawal.toStringAsFixed(0)}',
-                                style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 18),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
+      body: FutureBuilder<List<BikeRentalRecord>>(
+        future: _historyFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(color: Color(0xFF2E7D32)),
+            );
+          }
+          if (snapshot.hasError) {
+            return Center(
+              child: Text('Failed to load history: ${snapshot.error}'),
+            );
+          }
+
+          final records = snapshot.data!;
+          final earnings = OwnerEarnings.fromRecords(records);
+
+          return CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
                     children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => _showBikeStatusSheet(context),
-                          icon:
-                              const Icon(Icons.info_outline_rounded, size: 18),
-                          label: const Text('View Bike Status'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF2E7D32),
-                            side: const BorderSide(color: Color(0xFF2E7D32)),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(22),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF1B5E20), Color(0xFF388E3C)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
                           ),
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF2E7D32).withOpacity(0.3),
+                              blurRadius: 16,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.electric_bike_rounded,
+                                    color: Colors.white70, size: 18),
+                                SizedBox(width: 8),
+                                Text('Bike B201 • Academic Block A',
+                                    style: TextStyle(
+                                        color: Colors.white70, fontSize: 13)),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceAround,
+                              children: [
+                                _EarningsStat(
+                                    label: 'Total Rentals',
+                                    value: '${earnings.totalRentals}',
+                                    icon: Icons.people_rounded),
+                                Container(
+                                    width: 1, height: 50, color: Colors.white24),
+                                _EarningsStat(
+                                    label: 'Total Earned',
+                                    value:
+                                        '₹${earnings.totalEarnings.toStringAsFixed(0)}',
+                                    icon: Icons.currency_rupee_rounded),
+                                Container(
+                                    width: 1, height: 50, color: Colors.white24),
+                                _EarningsStat(
+                                    label: 'Withdrawn',
+                                    value:
+                                        '₹${earnings.withdrawn.toStringAsFixed(0)}',
+                                    icon: Icons.account_balance_rounded),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text('Available to Withdraw',
+                                      style: TextStyle(
+                                          color: Colors.white70, fontSize: 13)),
+                                  Text(
+                                    '₹${earnings.pendingWithdrawal.toStringAsFixed(0)}',
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 18),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: _withdrawing ? null : _withdraw,
-                          icon: _withdrawing
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2, color: Colors.white))
-                              : const Icon(Icons.account_balance_wallet_rounded,
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () => _showBikeStatusSheet(context),
+                              icon: const Icon(Icons.info_outline_rounded,
                                   size: 18),
-                          label:
-                              Text(_withdrawing ? 'Processing…' : 'Withdraw'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF2E7D32),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
+                              label: const Text('View Bike Status'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF2E7D32),
+                                side:
+                                    const BorderSide(color: Color(0xFF2E7D32)),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12)),
+                              ),
+                            ),
                           ),
-                        ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: _withdrawing
+                                  ? null
+                                  : () => _withdraw(earnings.pendingWithdrawal),
+                              icon: _withdrawing
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2, color: Colors.white))
+                                  : const Icon(
+                                      Icons.account_balance_wallet_rounded,
+                                      size: 18),
+                              label: Text(
+                                  _withdrawing ? 'Processing…' : 'Withdraw'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF2E7D32),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12)),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
+                ),
               ),
-            ),
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            sliver: SliverToBoxAdapter(
-              child: Row(
-                children: [
-                  const Icon(Icons.history_rounded,
-                      color: Color(0xFF2E7D32), size: 20),
-                  const SizedBox(width: 8),
-                  Text('Rental History',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFF1B5E20))),
-                  const Spacer(),
-                  Text('${_records.length} records',
-                      style: const TextStyle(color: Colors.grey, fontSize: 13)),
-                ],
+              SliverPadding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                sliver: SliverToBoxAdapter(
+                  child: Row(
+                    children: [
+                      const Icon(Icons.history_rounded,
+                          color: Color(0xFF2E7D32), size: 20),
+                      const SizedBox(width: 8),
+                      Text('Rental History',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF1B5E20))),
+                      const Spacer(),
+                      Text('${records.length} records',
+                          style: const TextStyle(
+                              color: Colors.grey, fontSize: 13)),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ),
-          SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (ctx, i) => _RentalRecordCard(
-                  record: _records[i], formatDuration: _formatDuration),
-              childCount: _records.length,
-            ),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 24)),
-        ],
+              SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (ctx, i) => _RentalRecordCard(
+                      record: records[i], formatDuration: _formatDuration),
+                  childCount: records.length,
+                ),
+              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 24)),
+            ],
+          );
+        },
       ),
     );
   }
