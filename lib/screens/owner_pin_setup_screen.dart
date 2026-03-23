@@ -32,10 +32,18 @@ class _OwnerPinSetupScreenState extends State<OwnerPinSetupScreen> {
 
   @override
   void dispose() {
-    for (var c in _pinControllers) c.dispose();
-    for (var c in _confirmControllers) c.dispose();
-    for (var f in _pinFocusNodes) f.dispose();
-    for (var f in _confirmFocusNodes) f.dispose();
+    for (var c in _pinControllers) {
+      c.dispose();
+    }
+    for (var c in _confirmControllers) {
+      c.dispose();
+    }
+    for (var f in _pinFocusNodes) {
+      f.dispose();
+    }
+    for (var f in _confirmFocusNodes) {
+      f.dispose();
+    }
     super.dispose();
   }
 

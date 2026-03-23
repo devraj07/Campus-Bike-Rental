@@ -20,7 +20,6 @@ class ProfileScreen extends StatelessWidget {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // Header
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 20),
@@ -68,33 +67,39 @@ class ProfileScreen extends StatelessWidget {
                         color: Colors.white.withOpacity(0.8), fontSize: 13),
                   ),
                   const SizedBox(height: 16),
-                  // Stats row
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      _ProfileStat(label: 'Rides', value: '5'),
+                      const _ProfileStat(label: 'Total Rides', value: '5'),
                       Container(
-                          width: 1, height: 40, color: Colors.white30,
-                          margin: const EdgeInsets.symmetric(horizontal: 20)),
-                      const _ProfileStat(label: 'Spent', value: '₹66'),
+                          width: 1,
+                          height: 40,
+                          color: Colors.white30,
+                          margin:
+                              const EdgeInsets.symmetric(horizontal: 20)),
+                      const _ProfileStat(
+                          label: 'Total Spent', value: '₹66'),
                       Container(
-                          width: 1, height: 40, color: Colors.white30,
-                          margin: const EdgeInsets.symmetric(horizontal: 20)),
-                      _ProfileStat(label: 'CO₂ Saved', value: '2.7g'),
+                          width: 1,
+                          height: 40,
+                          color: Colors.white30,
+                          margin:
+                              const EdgeInsets.symmetric(horizontal: 20)),
+                      const _ProfileStat(
+                          label: 'CO₂ Saved', value: '2.7g'),
                     ],
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 16),
-            // Menu section
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Account',
+                    'ACCOUNT',
                     style: theme.textTheme.labelLarge?.copyWith(
                       color: Colors.grey[500],
                       letterSpacing: 1,
@@ -147,7 +152,7 @@ class ProfileScreen extends StatelessWidget {
                   ]),
                   const SizedBox(height: 16),
                   Text(
-                    'Preferences',
+                    'PREFERENCES',
                     style: theme.textTheme.labelLarge?.copyWith(
                       color: Colors.grey[500],
                       letterSpacing: 1,
@@ -227,7 +232,7 @@ class ProfileScreen extends StatelessWidget {
                               fontWeight: FontWeight.w500),
                         ),
                         Text(
-                          'v1.0.0',
+                          'v2.0.0',
                           style: TextStyle(
                               color: Colors.grey[400], fontSize: 11),
                         ),
@@ -277,7 +282,9 @@ class _MenuCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6)],
+        boxShadow: const [
+          BoxShadow(color: Colors.black12, blurRadius: 6)
+        ],
       ),
       child: Column(children: children),
     );
@@ -322,9 +329,11 @@ class _MenuItem extends StatelessWidget {
       subtitle: subtitle != null
           ? Text(subtitle!, style: const TextStyle(fontSize: 12))
           : null,
-      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+      trailing:
+          const Icon(Icons.chevron_right_rounded, color: Colors.grey),
       onTap: onTap,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16)),
     );
   }
 }

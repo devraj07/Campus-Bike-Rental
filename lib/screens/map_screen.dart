@@ -36,13 +36,13 @@ class MapScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             color: Colors.white,
-            child: Row(
+            child: const Row(
               children: [
-                _LegendItem(color: const Color(0xFF2E7D32), label: 'Available'),
-                const SizedBox(width: 16),
-                _LegendItem(color: const Color(0xFFD32F2F), label: 'Full'),
-                const SizedBox(width: 16),
-                _LegendItem(color: const Color(0xFF1565C0), label: 'You'),
+                _LegendItem(color: Color(0xFF2E7D32), label: 'Available'),
+                SizedBox(width: 16),
+                _LegendItem(color: Color(0xFFD32F2F), label: 'Full'),
+                SizedBox(width: 16),
+                _LegendItem(color: Color(0xFF1565C0), label: 'You'),
               ],
             ),
           ),

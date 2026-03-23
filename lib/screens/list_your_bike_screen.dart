@@ -21,7 +21,7 @@ class _ListYourBikeScreenState extends State<ListYourBikeScreen>
   bool _isListedForRent = false;
   bool _ownerPinSet = false;
   final _api = ApiService();
-  BikeStatus _bikeStatus = BikeStatus.docked;
+  final BikeStatus _bikeStatus = BikeStatus.docked;
 
   static const List<String> _stations = [
     'Academic Block A',
@@ -197,7 +197,7 @@ class _ListYourBikeScreenState extends State<ListYourBikeScreen>
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
-                    value: _selectedStation,
+                    initialValue: _selectedStation,
                     decoration: const InputDecoration(
                         labelText: 'Parking Stand Location',
                         prefixIcon: Icon(Icons.location_on_rounded)),
@@ -394,7 +394,7 @@ class _ListYourBikeScreenState extends State<ListYourBikeScreen>
                             Switch(
                               value: _isListedForRent,
                               onChanged: _toggleRentListing,
-                              activeColor: const Color(0xFF2E7D32),
+                              activeThumbColor: const Color(0xFF2E7D32),
                             ),
                           ],
                         ),
@@ -539,23 +539,23 @@ class _ListYourBikeScreenState extends State<ListYourBikeScreen>
                 ),
                 const SizedBox(height: 16),
                 // Status guide
-                Card(
+                const Card(
                   child: Padding(
-                    padding: const EdgeInsets.all(18),
+                    padding: EdgeInsets.all(18),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Bike Status Guide',
+                        Text('Bike Status Guide',
                             style: TextStyle(
                                 fontWeight: FontWeight.w700,
                                 fontSize: 15,
                                 color: Color(0xFF1B5E20))),
-                        const SizedBox(height: 14),
-                        _StateRow(color: const Color(0xFF2E7D32), label: 'Docked', desc: 'At stand, ready to rent'),
-                        _StateRow(color: const Color(0xFFF9A825), label: 'Reserved', desc: 'Renter booked, OTP sent to lock'),
-                        _StateRow(color: const Color(0xFF1565C0), label: 'On Ride', desc: 'OTP entered, billing running'),
-                        _StateRow(color: const Color(0xFF9E9E9E), label: 'Unplugged', desc: 'Wire pulled, not yet unlocked'),
-                        _StateRow(color: const Color(0xFF6A1B9A), label: 'Owner Use', desc: 'You unlocked with owner PIN'),
+                        SizedBox(height: 14),
+                        _StateRow(color: Color(0xFF2E7D32), label: 'Docked', desc: 'At stand, ready to rent'),
+                        _StateRow(color: Color(0xFFF9A825), label: 'Reserved', desc: 'Renter booked, OTP sent to lock'),
+                        _StateRow(color: Color(0xFF1565C0), label: 'On Ride', desc: 'OTP entered, billing running'),
+                        _StateRow(color: Color(0xFF9E9E9E), label: 'Unplugged', desc: 'Wire pulled, not yet unlocked'),
+                        _StateRow(color: Color(0xFF6A1B9A), label: 'Owner Use', desc: 'You unlocked with owner PIN'),
                       ],
                     ),
                   ),
