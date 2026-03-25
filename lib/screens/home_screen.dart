@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/bike.dart';
 import '../services/api_service.dart';
 import '../widgets/bike_card.dart';
@@ -69,6 +70,7 @@ class _HomeTab extends StatefulWidget {
 class _HomeTabState extends State<_HomeTab> {
   final _searchController = TextEditingController();
   final _apiService = ApiService();
+  final User? _user = FirebaseAuth.instance.currentUser;
   List<Bike> _bikes = [];
   bool _isLoading = true;
   String _searchQuery = '';
@@ -99,6 +101,8 @@ class _HomeTabState extends State<_HomeTab> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final available = _bikes.where((b) => b.isAvailable).length;
+    final displayName = _user?.displayName ?? _user?.email?.split('@')[0] ?? 'User';
+    final avatar = displayName[0].toUpperCase();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FBF0),
@@ -126,12 +130,12 @@ class _HomeTabState extends State<_HomeTab> {
                     children: [
                       Row(
                         children: [
-                          const CircleAvatar(
+                          CircleAvatar(
                             radius: 22,
-                            backgroundColor: Color(0xFF66BB6A),
+                            backgroundColor: const Color(0xFF66BB6A),
                             child: Text(
-                              'D',
-                              style: TextStyle(
+                              avatar,
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w700,
                                 fontSize: 18,
@@ -143,7 +147,7 @@ class _HomeTabState extends State<_HomeTab> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Hi, Devraj Rawat ',
+                                'Hi, $displayName 👋',
                                 style: theme.textTheme.titleLarge?.copyWith(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w700,
@@ -193,7 +197,6 @@ class _HomeTabState extends State<_HomeTab> {
               ),
             ),
           ),
-          // Stats row
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -205,16 +208,15 @@ class _HomeTabState extends State<_HomeTab> {
                     color: const Color(0xFF2E7D32),
                   ),
                   const SizedBox(width: 10),
-                  _StatChip(
+                  const _StatChip(
                     icon: Icons.location_on_rounded,
                     label: '6 Stations',
-                    color: const Color(0xFF1565C0),
+                    color: Color(0xFF1565C0),
                   ),
                 ],
               ),
             ),
           ),
-          // Section title
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             sliver: SliverToBoxAdapter(
@@ -227,7 +229,6 @@ class _HomeTabState extends State<_HomeTab> {
               ),
             ),
           ),
-          // Bike list
           _isLoading
               ? const SliverFillRemaining(
                   child: Center(

@@ -187,28 +187,6 @@ class _OtpScreenState extends State<OtpScreen> {
                   ),
                 ),
               ),
-            const SizedBox(height: 24),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF8E1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFFFE082)),
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.info_outline_rounded,
-                      color: Color(0xFFF9A825), size: 18),
-                  SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'For demo: enter any 6-digit number.',
-                      style: TextStyle(fontSize: 13, color: Color(0xFF795548)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ],
         ),
       ),

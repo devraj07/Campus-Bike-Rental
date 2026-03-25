@@ -1,0 +1,36 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "campus-bike-rental-491203",
+          "appId": "1:651410024452:android:b6bcd8bc7be2212ae22d51",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "campus-bike-rental-491203",
+          "configurations": {
+            "android": "1:651410024452:android:b6bcd8bc7be2212ae22d51",
+            "web": "1:651410024452:web:ee13ab594e077002e22d51"
+          }
+        }
+      }
+    }
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}

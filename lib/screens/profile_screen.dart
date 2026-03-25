@@ -72,7 +72,7 @@ class ProfileScreen extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      _ProfileStat(label: 'Rides', value: '5'),
+                      const _ProfileStat(label: 'Rides', value: '5'),
                       Container(
                           width: 1, height: 40, color: Colors.white30,
                           margin: const EdgeInsets.symmetric(horizontal: 20)),
@@ -80,7 +80,7 @@ class ProfileScreen extends StatelessWidget {
                       Container(
                           width: 1, height: 40, color: Colors.white30,
                           margin: const EdgeInsets.symmetric(horizontal: 20)),
-                      _ProfileStat(label: 'CO₂ Saved', value: '2.7g'),
+                      const _ProfileStat(label: 'CO₂ Saved', value: '2.7g'),
                     ],
                   ),
                 ],

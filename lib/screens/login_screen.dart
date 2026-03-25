@@ -24,7 +24,8 @@ class _LoginScreenState extends State<LoginScreen>
     super.initState();
     _animController = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 600));
-    _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeIn);
+    _fadeAnim =
+        CurvedAnimation(parent: _animController, curve: Curves.easeIn);
     _animController.forward();
   }
 
@@ -45,16 +46,27 @@ class _LoginScreenState extends State<LoginScreen>
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => OtpScreen(
-            email: email,
-            isRegister: _isRegisterMode,
-          ),
+          builder: (_) => OtpScreen(email: email, isRegister: _isRegisterMode),
         ),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Error: $e')));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _signInWithGoogle() async {
+    setState(() => _isLoading = true);
+    try {
+      final user = await _authService.signInWithGoogle();
+      if (user == null) return;
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, '/home');
+    } catch (e) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -69,7 +81,11 @@ class _LoginScreenState extends State<LoginScreen>
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF1B5E20), Color(0xFF2E7D32), Color(0xFF388E3C)],
+            colors: [
+              Color(0xFF1B5E20),
+              Color(0xFF2E7D32),
+              Color(0xFF388E3C)
+            ],
           ),
         ),
         child: SafeArea(
@@ -77,7 +93,6 @@ class _LoginScreenState extends State<LoginScreen>
             opacity: _fadeAnim,
             child: Column(
               children: [
-                // Header
                 Expanded(
                   flex: 2,
                   child: Padding(
@@ -119,7 +134,6 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                   ),
                 ),
-                // Card
                 Expanded(
                   flex: 3,
                   child: Container(
@@ -135,7 +149,9 @@ class _LoginScreenState extends State<LoginScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            _isRegisterMode ? 'Create Account' : 'Welcome Back',
+                            _isRegisterMode
+                                ? 'Create Account'
+                                : 'Welcome Back',
                             style: theme.textTheme.headlineSmall?.copyWith(
                               fontWeight: FontWeight.w700,
                               color: const Color(0xFF1B5E20),
@@ -144,9 +160,8 @@ class _LoginScreenState extends State<LoginScreen>
                           const SizedBox(height: 6),
                           Text(
                             'Use your IITGN email to ${_isRegisterMode ? 'register' : 'sign in'}',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: Colors.grey[600],
-                            ),
+                            style: theme.textTheme.bodyMedium
+                                ?.copyWith(color: Colors.grey[600]),
                           ),
                           const SizedBox(height: 24),
                           TextFormField(
@@ -168,20 +183,55 @@ class _LoginScreenState extends State<LoginScreen>
                             },
                           ),
                           const SizedBox(height: 20),
-                          ElevatedButton(
-                            onPressed: _isLoading ? null : _submit,
-                            child: _isLoading
-                                ? const SizedBox(
-                                    height: 22,
-                                    width: 22,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.5,
-                                      color: Colors.white,
+                          SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: ElevatedButton(
+                              onPressed: _isLoading ? null : _submit,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF2E7D32),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: _isLoading
+                                  ? const SizedBox(
+                                      height: 22,
+                                      width: 22,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.5,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : Text(
+                                      _isRegisterMode
+                                          ? 'Register & Get OTP'
+                                          : 'Login with OTP',
+                                      style: const TextStyle(
+                                          color: Colors.white, fontSize: 16),
                                     ),
-                                  )
-                                : Text(_isRegisterMode
-                                    ? 'Register & Get OTP'
-                                    : 'Login with OTP'),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: OutlinedButton.icon(
+                              onPressed: _isLoading ? null : _signInWithGoogle,
+                              icon: const Icon(Icons.login,
+                                  color: Color(0xFF2E7D32)),
+                              label: const Text(
+                                'Login with Google (@iitgn.ac.in)',
+                                style: TextStyle(color: Color(0xFF2E7D32)),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(
+                                    color: Color(0xFF2E7D32)),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
                           ),
                           const SizedBox(height: 16),
                           Row(
@@ -194,8 +244,8 @@ class _LoginScreenState extends State<LoginScreen>
                                 style: TextStyle(color: Colors.grey[600]),
                               ),
                               GestureDetector(
-                                onTap: () => setState(
-                                    () => _isRegisterMode = !_isRegisterMode),
+                                onTap: () => setState(() =>
+                                    _isRegisterMode = !_isRegisterMode),
                                 child: Text(
                                   _isRegisterMode ? 'Login' : 'Register',
                                   style: const TextStyle(

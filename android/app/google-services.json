@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "651410024452",
+    "project_id": "campus-bike-rental-491203",
+    "storage_bucket": "campus-bike-rental-491203.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:651410024452:android:b6bcd8bc7be2212ae22d51",
+        "android_client_info": {
+          "package_name": "com.example.campus_bike_rental"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "651410024452-m33rbusrqs2onr7c2ttjqrtv8oq2f2mj.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDVT9lkyjRasuvAcJGHIX4uAOwkIUWjqDY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "651410024452-m33rbusrqs2onr7c2ttjqrtv8oq2f2mj.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

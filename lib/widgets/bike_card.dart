@@ -106,8 +106,8 @@ class BikeCard extends StatelessWidget {
                           ),
                         ),
                         const Spacer(),
-                        Icon(Icons.near_me_rounded,
-                            size: 14, color: const Color(0xFF9E9E9E)),
+                        const Icon(Icons.near_me_rounded,
+                            size: 14, color: Color(0xFF9E9E9E)),
                         const SizedBox(width: 2),
                         Text(
                           '${bike.distanceKm} km',
