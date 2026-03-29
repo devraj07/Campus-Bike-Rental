@@ -1,101 +1,108 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import '../models/bike.dart';
-import '../models/bike_rental_record.dart';
-import '../models/bike_state.dart';
 import '../models/ride.dart';
-import '../utils/code_generator.dart';
 
 class ApiService {
   static const String baseUrl = 'https://api.campusbike.iitgn.ac.in';
 
-  // Simulate network delay
-  Future<void> _delay([int ms = 800]) async {
-    await Future.delayed(Duration(milliseconds: ms));
+  Map<String, String> get _headers => {
+    'Content-Type': 'application/json',
+    // Add auth token later if needed
+    // 'Authorization': 'Bearer $token',
+  };
+
+  Future<dynamic> _get(String endpoint) async {
+    try {
+      final response = await http
+          .get(
+            Uri.parse('$baseUrl$endpoint'),
+            headers: _headers,
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+
+      return null;
+    } catch (e) {
+      print('GET error: $e');
+      return null;
+    }
+  }
+
+  Future<dynamic> _post(String endpoint, Map body) async {
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl$endpoint'),
+            headers: _headers,
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      print('POST $endpoint → ${response.body}');
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+
+      return null;
+    } catch (e) {
+      print('POST error: $e');
+      return null;
+    }
   }
 
   Future<List<Bike>> fetchAvailableBikes({String? query}) async {
-    await _delay();
-    final bikes = Bike.sampleBikes();
-    if (query != null && query.isNotEmpty) {
-      return bikes
-          .where((b) =>
-              b.id.toLowerCase().contains(query.toLowerCase()) ||
-              b.station.toLowerCase().contains(query.toLowerCase()))
-          .toList();
-    }
-    return bikes;
+    final data = await _get('/bikes');
+
+    return (data as List)
+        .map((e) => Bike.fromJson(e))
+        .toList();
   }
 
   Future<List<Ride>> fetchRideHistory(String userId) async {
-    await _delay();
-    return Ride.sampleRides();
+    final data = await _get('/rides/$userId');
+
+    return (data as List)
+        .map((e) => Ride.fromJson(e))
+        .toList();
   }
 
   Future<Map<String, dynamic>> startRide(String bikeId) async {
-    await _delay();
-    return {
-      'rideId': 'RD-${DateTime.now().millisecondsSinceEpoch}',
-      'pin': generate4DigitCode(),
-      'startTime': DateTime.now().toIso8601String(),
-    };
+    return await _post('/ride/start', {'bikeId': bikeId});
   }
+
 
   Future<Map<String, dynamic>> endRide(String rideId) async {
-    await _delay();
-    return {
-      'rideId': rideId,
-      'endTime': DateTime.now().toIso8601String(),
-      'distanceKm': 2.4,
-      'cost': 20.0,
-      'durationMinutes': 45,
-    };
+    return await _post('/ride/end', {'rideId': rideId});
   }
 
-  Future<bool> processPayment({
+  Future<Map<String, dynamic>> createOrder(double amount) async {
+    return await _post('/create-order', {'amount': amount});
+  }
+
+  Future<bool> verifyPayment(Map<String, dynamic> data) async {
+    final res = await _post('/verify-payment', data);
+    return res['success'] == true;
+  }
+
+  Future<bool> payWithWallet({
     required String rideId,
     required double amount,
-    required String method,
   }) async {
-    await _delay(1200);
-    return true;
+    final res = await _post('/wallet/pay', {
+      'rideId': rideId,
+      'amount': amount,
+    });
+
+    return res['success'] == true;
   }
 
-  Future<bool> submitBikeListing({
-    required String bikeId,
-    required String station,
-    String? imagePath,
-  }) async {
-    await _delay();
-    return true;
-  }
-
-  Future<Map<String, dynamic>> startRental(String bikeId, String pin) async {
-    await _delay();
-    return {
-      'rideId': 'RD-${DateTime.now().millisecondsSinceEpoch}',
-      'pin': pin,
-      'startTime': DateTime.now().toIso8601String(),
-    };
-  }
-
-  Future<List<StandAvailability>> fetchStands() async {
-    await _delay();
-    return StandAvailability.sampleStands();
-  }
-
-  Future<List<BikeRentalRecord>> fetchRentalHistory(String userId) async {
-    await _delay();
-    return BikeRentalRecord.sampleRecords();
-  }
-
-  Future<Map<String, dynamic>> fetchUserProfile(String userId) async {
-    await _delay();
-    return {
-      'name': 'Devraj Rawat',
-      'email': 'devraj.rawat@iitgn.ac.in',
-      'totalRides': 5,
-      'totalSpent': 66.0,
-      'co2SavedGrams': 2.7,
-      'walletBalance': 120.0,
-    };
+  Future<double> getWalletBalance() async {
+    final res = await _get('/wallet/balance');
+    return (res['balance'] as num).toDouble();
   }
 }

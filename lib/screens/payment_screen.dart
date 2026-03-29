@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../models/bike.dart';
 import '../services/api_service.dart';
 import 'home_screen.dart';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
+import 'dart:async';
 
 class PaymentScreen extends StatefulWidget {
   final Bike bike;
@@ -28,6 +30,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
   bool _paying = false;
   bool _paid = false;
   final _api = ApiService();
+  late Razorpay _razorpay;
+  double _walletBalance = 0;
 
   String _formatDuration(Duration d) {
     final m = d.inMinutes;
@@ -38,26 +42,127 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   Future<void> _pay() async {
     setState(() => _paying = true);
+
     try {
-      final success = await _api.processPayment(
-        rideId: widget.rideId,
-        amount: widget.cost,
-        method: _selectedMethod,
-      );
+      bool success = false;
+
+      if (_selectedMethod == 'WALLET') {
+        if (_walletBalance < widget.cost) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Insufficient wallet balance')),
+          );
+          setState(() => _paying = false);
+          return;
+        }
+
+        success = await _api.payWithWallet(
+          rideId: widget.rideId,
+          amount: widget.cost,
+        );
+      } else {
+        success = await _handleRazorpayPayment();
+      }
+
       if (!mounted) return;
+
       if (success) {
         setState(() => _paid = true);
+
         await Future.delayed(const Duration(seconds: 2));
+
         if (!mounted) return;
+
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (_) => const HomeScreen()),
           (_) => false,
         );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Payment failed. Try again')),
+        );
       }
     } finally {
       if (mounted) setState(() => _paying = false);
     }
+  }
+
+  Future<bool> _handleRazorpayPayment() async {
+    final completer = Completer<bool>();
+
+    try {
+      final order = await _api.createOrder(widget.cost);
+      if (order == null || order['id'] == null) {
+        return false;
+      }
+
+      var options = {
+        'key': order['key'], // backend should send this
+        'amount': order['amount'],
+        'order_id': order['id'],
+        'name': 'Campus Bike Rental',
+        'description': 'Ride Payment',
+        'prefill': {
+          'contact': '9999999999',
+          'email': 'test@test.com',
+        }
+      };
+
+      if (response.orderId == null ||
+          response.paymentId == null ||
+          response.signature == null) {
+        completer.complete(false);
+        return;
+      }
+
+      // Clear old listeners (VERY IMPORTANT)
+      _razorpay.clear();
+
+      // Success
+      _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS,
+          (PaymentSuccessResponse response) async {
+        final verified = await _api.verifyPayment({
+          'order_id': response.orderId,
+          'payment_id': response.paymentId,
+          'signature': response.signature,
+        });
+
+        completer.complete(verified);
+      });
+
+      // Failure
+      _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR,
+          (PaymentFailureResponse response) {
+        completer.complete(false);
+      });
+
+      _razorpay.open(options);
+
+      return completer.future;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<void> _loadWallet() async {
+  final balance = await _api.getWalletBalance();
+  if (!mounted) return;
+  setState(() => _walletBalance = balance);
+}
+
+  @override
+  void initState() {
+    super.initState();
+
+    _razorpay = Razorpay();
+    
+    _loadWallet();
+  }
+
+  @override
+  void dispose() {
+    _razorpay.clear();
+    super.dispose();
   }
 
   @override
@@ -191,8 +296,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               groupValue: _selectedMethod,
               icon: Icons.wallet_rounded,
               label: 'Campus Wallet',
-              subtitle: 'Balance: ₹120.00',
-              color: const Color(0xFF1565C0),
+              subtitle: 'Balance: ₹${_walletBalance.toStringAsFixed(2)}',              color: const Color(0xFF1565C0),
               onChanged: (v) => setState(() => _selectedMethod = v!),
             ),
             _PaymentOption(
