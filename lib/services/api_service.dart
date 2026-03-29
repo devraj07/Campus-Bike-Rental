@@ -1,5 +1,8 @@
 import '../models/bike.dart';
+import '../models/bike_rental_record.dart';
+import '../models/bike_state.dart';
 import '../models/ride.dart';
+import '../utils/code_generator.dart';
 
 class ApiService {
   static const String baseUrl = 'https://api.campusbike.iitgn.ac.in';
@@ -31,7 +34,7 @@ class ApiService {
     await _delay();
     return {
       'rideId': 'RD-${DateTime.now().millisecondsSinceEpoch}',
-      'pin': (1000 + DateTime.now().millisecond % 9000).toString().substring(0, 4),
+      'pin': generate4DigitCode(),
       'startTime': DateTime.now().toIso8601String(),
     };
   }
@@ -63,5 +66,36 @@ class ApiService {
   }) async {
     await _delay();
     return true;
+  }
+
+  Future<Map<String, dynamic>> startRental(String bikeId, String pin) async {
+    await _delay();
+    return {
+      'rideId': 'RD-${DateTime.now().millisecondsSinceEpoch}',
+      'pin': pin,
+      'startTime': DateTime.now().toIso8601String(),
+    };
+  }
+
+  Future<List<StandAvailability>> fetchStands() async {
+    await _delay();
+    return StandAvailability.sampleStands();
+  }
+
+  Future<List<BikeRentalRecord>> fetchRentalHistory(String userId) async {
+    await _delay();
+    return BikeRentalRecord.sampleRecords();
+  }
+
+  Future<Map<String, dynamic>> fetchUserProfile(String userId) async {
+    await _delay();
+    return {
+      'name': 'Devraj Rawat',
+      'email': 'devraj.rawat@iitgn.ac.in',
+      'totalRides': 5,
+      'totalSpent': 66.0,
+      'co2SavedGrams': 2.7,
+      'walletBalance': 120.0,
+    };
   }
 }
