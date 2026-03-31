@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'screens/login_screen.dart';
+import 'screens/home_screen.dart';
+import 'services/auth_service.dart';
+import 'services/user_session.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -12,13 +16,29 @@ void main() async {
 class CampusBikeRentalApp extends StatelessWidget {
   const CampusBikeRentalApp({super.key});
 
+  /// If user is already signed in from a previous session, restore UserSession
+  /// and go straight to HomeScreen. Otherwise show LoginScreen.
+  Widget _resolveHome() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null && user.email != null) {
+      // Restore session — full profile loads lazily in each screen
+      UserSession.set(
+        userId: user.uid,
+        name: AuthService().nameFromEmail(user.email!),
+        email: user.email!,
+      );
+      return const HomeScreen();
+    }
+    return const LoginScreen();
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Campus Bike Rental – IITGN',
       debugShowCheckedModeBanner: false,
       theme: _buildTheme(),
-      home: const LoginScreen(),
+      home: _resolveHome(),
     );
   }
 

@@ -1,67 +1,67 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'user_session.dart';
 
 class AuthService {
   static const String _allowedDomain = '@iitgn.ac.in';
+  final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+
+  // The URL Firebase will redirect to after the user clicks the email link.
+  // Must be an authorized domain in Firebase Console → Authentication → Settings.
+  static const String _continueUrl =
+      'https://iitgn-campus-bike-rental.web.app/login';
 
   bool isValidEmail(String email) {
     return email.trim().toLowerCase().endsWith(_allowedDomain) &&
         email.trim().length > _allowedDomain.length;
   }
 
+  /// Sends a Firebase sign-in link to the given email.
   Future<bool> sendOtp(String email) async {
-    await Future.delayed(const Duration(milliseconds: 800));
-    // TODO: Keshav — trigger real OTP via Firebase Auth here
+    final actionCodeSettings = ActionCodeSettings(
+      url: _continueUrl,
+      handleCodeInApp: true,
+      androidPackageName: 'com.example.campus_bike_rental',
+      androidInstallApp: true,
+      androidMinimumVersion: '21',
+    );
+    await _auth.sendSignInLinkToEmail(
+      email: email,
+      actionCodeSettings: actionCodeSettings,
+    );
     return true;
   }
 
-  Future<bool> verifyOtp(String email, String otp) async {
-    await Future.delayed(const Duration(milliseconds: 600));
-    // TODO: Keshav — verify OTP via Firebase Auth here
-    // For demo: accept any 6-digit code
-    return otp.length == 6;
+  /// Completes sign-in using the email link the user clicked.
+  /// Call this from OtpScreen once the deep link is received.
+  Future<bool> signInWithEmailLink(String email, String emailLink) async {
+    if (!_auth.isSignInWithEmailLink(emailLink)) return false;
+
+    final credential = await _auth.signInWithEmailLink(
+      email: email,
+      emailLink: emailLink,
+    );
+    final user = credential.user;
+    if (user == null) return false;
+
+    await _createOrFetchUser(user.uid, email);
+    return true;
   }
 
-  /// Derives a clean document ID from the email.
-  /// e.g. "devraj.rawat@iitgn.ac.in" → "devraj_rawat"
-  String _userIdFromEmail(String email) {
-    return email.split('@').first.replaceAll('.', '_').toLowerCase();
-  }
-
-  /// Derives a display name from the email local part.
-  /// e.g. "devraj.rawat" → "Devraj Rawat"
-  String _nameFromEmail(String email) {
-    final local = email.split('@').first;
-    return local
-        .split('.')
-        .map((part) => part.isNotEmpty
-            ? '${part[0].toUpperCase()}${part.substring(1)}'
-            : '')
-        .join(' ');
-  }
-
-  /// Fetches user from Firestore (or creates doc on first login).
-  /// Populates UserSession so all screens can access the current user.
-  Future<Map<String, dynamic>> login(String email) async {
-    final userId = _userIdFromEmail(email);
-    final docRef = _db.collection('users').doc(userId);
+  /// Creates user doc in Firestore on first login, or loads existing data.
+  Future<void> _createOrFetchUser(String uid, String email) async {
+    final docRef = _db.collection('users').doc(uid);
     final doc = await docRef.get();
 
     if (doc.exists) {
       final d = doc.data()!;
       UserSession.set(
-        userId: userId,
+        userId: uid,
         name: d['name'] as String,
         email: email,
       );
-      return {
-        'userId': userId,
-        'name': d['name'],
-        'email': email,
-      };
     } else {
-      // First login — create user document
       final name = _nameFromEmail(email);
       await docRef.set({
         'name': name,
@@ -72,20 +72,27 @@ class AuthService {
         'walletBalance': 0.0,
         'createdAt': Timestamp.now(),
       });
-      UserSession.set(userId: userId, name: name, email: email);
-      return {
-        'userId': userId,
-        'name': name,
-        'email': email,
-      };
+      UserSession.set(userId: uid, name: name, email: email);
     }
   }
 
-  Future<Map<String, dynamic>> register(String email) async {
-    return login(email); // same flow — create if not exists
+  /// Derives display name from email.
+  /// e.g. "devraj.rawat@iitgn.ac.in" → "Devraj Rawat"
+  String nameFromEmail(String email) => _nameFromEmail(email);
+
+  String _nameFromEmail(String email) {
+    final local = email.split('@').first;
+    return local
+        .split('.')
+        .map((p) => p.isNotEmpty ? '${p[0].toUpperCase()}${p.substring(1)}' : '')
+        .join(' ');
   }
 
   Future<void> logout() async {
+    await _auth.signOut();
     UserSession.clear();
   }
+
+  // Keep for compatibility — verifyOtp is no longer used with email link
+  Future<bool> verifyOtp(String email, String otp) async => false;
 }
