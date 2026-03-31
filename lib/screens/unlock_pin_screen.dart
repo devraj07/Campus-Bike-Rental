@@ -1,18 +1,16 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/bike.dart';
+import '../services/api_service.dart';
+import '../utils/code_generator.dart';
 import 'active_ride_screen.dart';
 
 class UnlockPinScreen extends StatefulWidget {
   final Bike bike;
-  final String pin;
-  final String rideId;
 
   const UnlockPinScreen({
     super.key,
     required this.bike,
-    required this.pin,
-    required this.rideId,
   });
 
   @override
@@ -24,6 +22,7 @@ class _UnlockPinScreenState extends State<UnlockPinScreen>
   late int _seconds;
   Timer? _timer;
   late String _currentPin;
+  bool _unlocking = false;
   late AnimationController _pulseController;
   late Animation<double> _pulseAnim;
 
@@ -31,7 +30,7 @@ class _UnlockPinScreenState extends State<UnlockPinScreen>
   void initState() {
     super.initState();
     _seconds = 60;
-    _currentPin = widget.pin;
+    _currentPin = generate4DigitCode();
     _startTimer();
     _pulseController = AnimationController(
         vsync: this,
@@ -57,9 +56,7 @@ class _UnlockPinScreenState extends State<UnlockPinScreen>
   }
 
   void _regeneratePin() {
-    final newPin =
-        (1000 + DateTime.now().millisecond % 9000).toString().substring(0, 4);
-    setState(() => _currentPin = newPin);
+    setState(() => _currentPin = generate4DigitCode());
     _startTimer();
   }
 
@@ -241,7 +238,7 @@ class _UnlockPinScreenState extends State<UnlockPinScreen>
             const SizedBox(height: 14),
             // Billing starts ONLY after PIN entered on physical keypad
             ElevatedButton.icon(
-              onPressed: () {
+              onPressed: _unlocking ? null : () {
                 showDialog(
                   context: context,
                   barrierDismissible: false,
@@ -264,19 +261,27 @@ class _UnlockPinScreenState extends State<UnlockPinScreen>
                             style: TextStyle(color: Colors.grey)),
                       ),
                       ElevatedButton(
-                        onPressed: () {
-                          _timer?.cancel();
+                        onPressed: () async {
                           Navigator.pop(context);
-                          Navigator.pushReplacement(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => ActiveRideScreen(
-                                bike: widget.bike,
-                                rideId: widget.rideId,
-                                startTime: DateTime.now(),
+                          _timer?.cancel();
+                          setState(() => _unlocking = true);
+                          try {
+                            final result = await ApiService()
+                                .startRental(widget.bike.id, _currentPin);
+                            if (!mounted) return;
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ActiveRideScreen(
+                                  bike: widget.bike,
+                                  rideId: result['rideId'] as String,
+                                  startTime: DateTime.now(),
+                                ),
                               ),
-                            ),
-                          );
+                            );
+                          } finally {
+                            if (mounted) setState(() => _unlocking = false);
+                          }
                         },
                         child: const Text('Yes, Start Billing'),
                       ),
@@ -284,8 +289,15 @@ class _UnlockPinScreenState extends State<UnlockPinScreen>
                   ),
                 );
               },
-              icon: const Icon(Icons.check_circle_outline_rounded),
-              label: const Text('Bike Unlocked – Start Ride'),
+              icon: _unlocking
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.check_circle_outline_rounded),
+              label: Text(_unlocking ? 'Starting...' : 'Bike Unlocked – Start Ride'),
             ),
           ],
         ),

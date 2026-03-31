@@ -1,146 +1,36 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../models/bike_state.dart';
+import '../services/api_service.dart';
 
-class MapScreen extends StatelessWidget {
+class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
 
-  static const List<_BikeStation> _stations = [
-    _BikeStation('Academic Block A', 0.25, 0.30, 4),
-    _BikeStation('Hostel 1 Stand', 0.70, 0.20, 3),
-    _BikeStation('Library Gate', 0.45, 0.55, 2),
-    _BikeStation('Sports Complex', 0.80, 0.75, 5),
-    _BikeStation('Mess Block', 0.20, 0.70, 6),
-    _BikeStation('Admin Building', 0.55, 0.85, 1),
-  ];
+  @override
+  State<MapScreen> createState() => _MapScreenState();
+}
+
+class _MapScreenState extends State<MapScreen> {
+  late Future<List<StandAvailability>> _standsFuture;
+
+  // Map positions are a display-layer concern — not stored in the backend.
+  // Keyed by standName to remain stable even if API order changes.
+  static const Map<String, List<double>> _positionMap = {
+    'Academic Block A': [0.25, 0.30],
+    'Library Gate':     [0.45, 0.55],
+    'Hostel 1 Stand':   [0.70, 0.20],
+    'Mess Block':       [0.20, 0.70],
+    'Sports Complex':   [0.80, 0.75],
+    'Admin Building':   [0.55, 0.85],
+  };
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Scaffold(
-      backgroundColor: const Color(0xFFF9FBF0),
-      appBar: AppBar(
-        title: const Text('Campus Map'),
-        backgroundColor: const Color(0xFF2E7D32),
-        automaticallyImplyLeading: false,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.my_location_rounded),
-            onPressed: () {},
-            tooltip: 'My Location',
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Legend
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            color: Colors.white,
-            child: const Row(
-              children: [
-                _LegendItem(color: Color(0xFF2E7D32), label: 'Available'),
-                SizedBox(width: 16),
-                _LegendItem(color: Color(0xFFD32F2F), label: 'Full'),
-                SizedBox(width: 16),
-                _LegendItem(color: Color(0xFF1565C0), label: 'You'),
-              ],
-            ),
-          ),
-          // Map placeholder
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return Stack(
-                  children: [
-                    // Map background
-                    Container(
-                      color: const Color(0xFFE8F5E9),
-                      child: CustomPaint(
-                        size: Size(constraints.maxWidth, constraints.maxHeight),
-                        painter: _CampusMapPainter(),
-                      ),
-                    ),
-                    // Station markers
-                    ..._stations.map((s) => Positioned(
-                          left: s.xFraction * constraints.maxWidth - 20,
-                          top: s.yFraction * constraints.maxHeight - 20,
-                          child: GestureDetector(
-                            onTap: () => _showStationSheet(context, s),
-                            child: _StationMarker(station: s),
-                          ),
-                        )),
-                    // User location dot
-                    Positioned(
-                      left: 0.42 * constraints.maxWidth - 10,
-                      top: 0.48 * constraints.maxHeight - 10,
-                      child: Container(
-                        width: 20,
-                        height: 20,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1565C0),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 3),
-                          boxShadow: const [
-                            BoxShadow(color: Colors.black26, blurRadius: 4)
-                          ],
-                        ),
-                      ),
-                    ),
-                    // IITGN label
-                    Positioned(
-                      top: 16,
-                      left: 16,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: const [
-                            BoxShadow(color: Colors.black12, blurRadius: 6)
-                          ],
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.school_rounded,
-                                color: Color(0xFF2E7D32), size: 16),
-                            SizedBox(width: 6),
-                            Text(
-                              'IIT Gandhinagar Campus',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 12,
-                                color: Color(0xFF1B5E20),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-          // Bottom station list
-          Container(
-            height: 130,
-            color: Colors.white,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.all(12),
-              itemCount: _stations.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
-              itemBuilder: (ctx, i) => _StationChip(station: _stations[i]),
-            ),
-          ),
-        ],
-      ),
-    );
+  void initState() {
+    super.initState();
+    _standsFuture = ApiService().fetchStands();
   }
 
-  void _showStationSheet(BuildContext context, _BikeStation s) {
+  void _showStationSheet(BuildContext context, StandAvailability stand) {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -156,24 +46,33 @@ class MapScreen extends StatelessWidget {
                 const Icon(Icons.location_on_rounded,
                     color: Color(0xFF2E7D32)),
                 const SizedBox(width: 8),
-                Text(
-                  s.name,
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w700),
+                Expanded(
+                  child: Text(
+                    stand.standName,
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w700),
+                  ),
                 ),
               ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              stand.description,
+              style: const TextStyle(color: Colors.grey, fontSize: 13),
             ),
             const SizedBox(height: 12),
             Row(
               children: [
                 _InfoPill(
-                  label: '${s.availableBikes} bikes',
-                  color: const Color(0xFF2E7D32),
+                  label: '${stand.availableBikes} bikes available',
+                  color: stand.availableBikes > 0
+                      ? const Color(0xFF2E7D32)
+                      : const Color(0xFFD32F2F),
                 ),
                 const SizedBox(width: 8),
-                const _InfoPill(
-                  label: '10 slots',
-                  color: Color(0xFF1565C0),
+                _InfoPill(
+                  label: '${stand.totalSlots} slots',
+                  color: const Color(0xFF1565C0),
                 ),
               ],
             ),
@@ -185,6 +84,163 @@ class MapScreen extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF9FBF0),
+      appBar: AppBar(
+        title: const Text('Campus Map'),
+        backgroundColor: const Color(0xFF2E7D32),
+        automaticallyImplyLeading: false,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.my_location_rounded),
+            onPressed: () {},
+            tooltip: 'My Location',
+          ),
+        ],
+      ),
+      body: FutureBuilder<List<StandAvailability>>(
+        future: _standsFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(color: Color(0xFF2E7D32)),
+            );
+          }
+          if (snapshot.hasError) {
+            return Center(
+              child: Text('Failed to load stands: ${snapshot.error}'),
+            );
+          }
+
+          final stands = snapshot.data!;
+
+          return Column(
+            children: [
+              // Legend
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                color: Colors.white,
+                child: Row(
+                  children: [
+                    _LegendItem(
+                        color: const Color(0xFF2E7D32), label: 'Available'),
+                    const SizedBox(width: 16),
+                    _LegendItem(
+                        color: const Color(0xFFD32F2F), label: 'Full'),
+                    const SizedBox(width: 16),
+                    _LegendItem(
+                        color: const Color(0xFF1565C0), label: 'You'),
+                  ],
+                ),
+              ),
+              // Map
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return Stack(
+                      children: [
+                        // Map background
+                        Container(
+                          color: const Color(0xFFE8F5E9),
+                          child: CustomPaint(
+                            size: Size(
+                                constraints.maxWidth, constraints.maxHeight),
+                            painter: _CampusMapPainter(),
+                          ),
+                        ),
+                        // Dynamic stand markers
+                        ...stands.map((stand) {
+                          final pos = _positionMap[stand.standName] ??
+                              [0.5, 0.5];
+                          return Positioned(
+                            left: pos[0] * constraints.maxWidth - 20,
+                            top: pos[1] * constraints.maxHeight - 20,
+                            child: GestureDetector(
+                              onTap: () =>
+                                  _showStationSheet(context, stand),
+                              child: _StationMarker(stand: stand),
+                            ),
+                          );
+                        }),
+                        // User location dot
+                        Positioned(
+                          left: 0.42 * constraints.maxWidth - 10,
+                          top: 0.48 * constraints.maxHeight - 10,
+                          child: Container(
+                            width: 20,
+                            height: 20,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1565C0),
+                              shape: BoxShape.circle,
+                              border:
+                                  Border.all(color: Colors.white, width: 3),
+                              boxShadow: const [
+                                BoxShadow(
+                                    color: Colors.black26, blurRadius: 4)
+                              ],
+                            ),
+                          ),
+                        ),
+                        // IITGN label
+                        Positioned(
+                          top: 16,
+                          left: 16,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: const [
+                                BoxShadow(
+                                    color: Colors.black12, blurRadius: 6)
+                              ],
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.school_rounded,
+                                    color: Color(0xFF2E7D32), size: 16),
+                                SizedBox(width: 6),
+                                Text(
+                                  'IIT Gandhinagar Campus',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12,
+                                    color: Color(0xFF1B5E20),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+              // Bottom stand list
+              Container(
+                height: 130,
+                color: Colors.white,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.all(12),
+                  itemCount: stands.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (ctx, i) => _StationChip(stand: stands[i]),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -201,36 +257,47 @@ class _CampusMapPainter extends CustomPainter {
 
     final buildingPaint = Paint()..color = const Color(0xFFC8E6C9);
 
-    // Draw some roads
     final roads = [
       [Offset(0, size.height * 0.45), Offset(size.width, size.height * 0.45)],
       [Offset(size.width * 0.45, 0), Offset(size.width * 0.45, size.height)],
-      [Offset(0, size.height * 0.25), Offset(size.width * 0.7, size.height * 0.25)],
-      [Offset(size.width * 0.7, size.height * 0.25), Offset(size.width, size.height * 0.6)],
-      [Offset(0, size.height * 0.7), Offset(size.width * 0.5, size.height * 0.7)],
-      [Offset(size.width * 0.5, size.height * 0.7), Offset(size.width, size.height * 0.85)],
+      [
+        Offset(0, size.height * 0.25),
+        Offset(size.width * 0.7, size.height * 0.25)
+      ],
+      [
+        Offset(size.width * 0.7, size.height * 0.25),
+        Offset(size.width, size.height * 0.6)
+      ],
+      [
+        Offset(0, size.height * 0.7),
+        Offset(size.width * 0.5, size.height * 0.7)
+      ],
+      [
+        Offset(size.width * 0.5, size.height * 0.7),
+        Offset(size.width, size.height * 0.85)
+      ],
     ];
 
     for (final r in roads) {
       canvas.drawLine(r[0], r[1], roadPaint);
     }
 
-    // Draw building blocks
     final rng = Random(42);
     for (int i = 0; i < 12; i++) {
       final x = rng.nextDouble() * (size.width - 60) + 10;
       final y = rng.nextDouble() * (size.height - 50) + 10;
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromLTWH(x, y, 40 + rng.nextDouble() * 30, 30 + rng.nextDouble() * 20),
+          Rect.fromLTWH(x, y, 40 + rng.nextDouble() * 30,
+              30 + rng.nextDouble() * 20),
           const Radius.circular(4),
         ),
         buildingPaint,
       );
     }
 
-    // Draw grass patches
-    final grassPaint = Paint()..color = const Color(0xFFA5D6A7).withOpacity(0.5);
+    final grassPaint =
+        Paint()..color = const Color(0xFFA5D6A7).withOpacity(0.5);
     canvas.drawOval(
         Rect.fromCenter(
             center: Offset(size.width * 0.5, size.height * 0.45),
@@ -244,33 +311,33 @@ class _CampusMapPainter extends CustomPainter {
 }
 
 class _StationMarker extends StatelessWidget {
-  final _BikeStation station;
-  const _StationMarker({required this.station});
+  final StandAvailability stand;
+  const _StationMarker({required this.stand});
 
   @override
   Widget build(BuildContext context) {
-    final hasAvailable = station.availableBikes > 0;
+    final hasAvailable = stand.availableBikes > 0;
+    final markerColor = hasAvailable
+        ? const Color(0xFF2E7D32)
+        : const Color(0xFFD32F2F);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: hasAvailable ? const Color(0xFF2E7D32) : const Color(0xFFD32F2F),
+            color: markerColor,
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: (hasAvailable
-                        ? const Color(0xFF2E7D32)
-                        : const Color(0xFFD32F2F))
-                    .withOpacity(0.4),
+                color: markerColor.withOpacity(0.4),
                 blurRadius: 8,
                 spreadRadius: 2,
               ),
             ],
           ),
           child: Text(
-            '${station.availableBikes}',
+            '${stand.availableBikes}',
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w800,
@@ -278,16 +345,15 @@ class _StationMarker extends StatelessWidget {
             ),
           ),
         ),
-        const Icon(Icons.arrow_drop_down_rounded,
-            color: Color(0xFF2E7D32), size: 16),
+        Icon(Icons.arrow_drop_down_rounded, color: markerColor, size: 16),
       ],
     );
   }
 }
 
 class _StationChip extends StatelessWidget {
-  final _BikeStation station;
-  const _StationChip({required this.station});
+  final StandAvailability stand;
+  const _StationChip({required this.stand});
 
   @override
   Widget build(BuildContext context) {
@@ -310,7 +376,7 @@ class _StationChip extends StatelessWidget {
               const SizedBox(width: 4),
               Expanded(
                 child: Text(
-                  station.name,
+                  stand.standName,
                   style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
@@ -321,13 +387,21 @@ class _StationChip extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Text(
-            '${station.availableBikes} bikes available',
-            style: const TextStyle(
+            stand.description,
+            style: const TextStyle(fontSize: 10, color: Colors.grey),
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${stand.availableBikes} bikes available',
+            style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
-              color: Color(0xFF4CAF50),
+              color: stand.availableBikes > 0
+                  ? const Color(0xFF4CAF50)
+                  : const Color(0xFFD32F2F),
             ),
           ),
         ],
@@ -372,17 +446,8 @@ class _InfoPill extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(label,
-          style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 13)),
+          style: TextStyle(
+              color: color, fontWeight: FontWeight.w600, fontSize: 13)),
     );
   }
-}
-
-class _BikeStation {
-  final String name;
-  final double xFraction;
-  final double yFraction;
-  final int availableBikes;
-
-  const _BikeStation(
-      this.name, this.xFraction, this.yFraction, this.availableBikes);
 }
