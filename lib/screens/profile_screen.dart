@@ -4,6 +4,7 @@ import 'list_your_bike_screen.dart';
 import 'owner_rental_history_screen.dart';
 import 'login_screen.dart';
 import '../services/api_service.dart';
+import '../services/user_session.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -18,7 +19,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _profileFuture = ApiService().fetchUserProfile('USR-001');
+    _profileFuture = ApiService().fetchUserProfile(UserSession.userId);
   }
 
   String _initials(String name) {

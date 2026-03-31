@@ -4,6 +4,7 @@ import '../models/ride.dart';
 import '../models/bike_state.dart';
 import '../models/bike_rental_record.dart';
 import '../utils/code_generator.dart';
+import 'user_session.dart';
 
 class ApiService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -130,7 +131,7 @@ class ApiService {
 
     await rideRef.set({
       'bikeId': bikeId,
-      'userId': 'USR-001',           // replace with FirebaseAuth.instance.currentUser!.uid once auth is live
+      'userId': UserSession.userId,
       'pin': pin,
       'startTime': Timestamp.fromDate(now),
       'endTime': null,
@@ -209,7 +210,7 @@ class ApiService {
       'type': 'Standard',
       'distanceKm': 0.0,
       'imageUrl': imagePath ?? '',
-      'ownerId': 'USR-001',         // replace with FirebaseAuth.instance.currentUser!.uid
+      'ownerId': UserSession.userId,
       'listedAt': Timestamp.now(),
     });
     return true;

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/bike_rental_record.dart';
 import '../services/api_service.dart';
+import '../services/user_session.dart';
 
 class OwnerRentalHistoryScreen extends StatefulWidget {
   const OwnerRentalHistoryScreen({super.key});
@@ -18,7 +19,7 @@ class _OwnerRentalHistoryScreenState extends State<OwnerRentalHistoryScreen> {
   @override
   void initState() {
     super.initState();
-    _historyFuture = ApiService().fetchRentalHistory('USR-001');
+    _historyFuture = ApiService().fetchRentalHistory(UserSession.userId);
   }
 
   String _formatDuration(Duration d) {

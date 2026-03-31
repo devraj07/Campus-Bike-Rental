@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/ride.dart';
 import '../services/api_service.dart';
+import '../services/user_session.dart';
 
 class RideHistoryScreen extends StatefulWidget {
   const RideHistoryScreen({super.key});
@@ -16,7 +17,7 @@ class _RideHistoryScreenState extends State<RideHistoryScreen> {
   @override
   void initState() {
     super.initState();
-    _ridesFuture = ApiService().fetchRideHistory('USR-001');
+    _ridesFuture = ApiService().fetchRideHistory(UserSession.userId);
   }
 
   @override

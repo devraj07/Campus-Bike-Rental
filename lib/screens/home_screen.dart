@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/bike.dart';
 import '../services/api_service.dart';
+import '../services/user_session.dart';
 import '../widgets/bike_card.dart';
 import 'bike_details_screen.dart';
 import 'stand_availability_screen.dart';
@@ -126,12 +127,12 @@ class _HomeTabState extends State<_HomeTab> {
                     children: [
                       Row(
                         children: [
-                          const CircleAvatar(
+                          CircleAvatar(
                             radius: 22,
-                            backgroundColor: Color(0xFF66BB6A),
+                            backgroundColor: const Color(0xFF66BB6A),
                             child: Text(
-                              'D',
-                              style: TextStyle(
+                              UserSession.initials,
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w700,
                                 fontSize: 18,
@@ -143,7 +144,7 @@ class _HomeTabState extends State<_HomeTab> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Hi, Devraj Rawat ',
+                                'Hi, ${UserSession.name} ',
                                 style: theme.textTheme.titleLarge?.copyWith(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w700,
