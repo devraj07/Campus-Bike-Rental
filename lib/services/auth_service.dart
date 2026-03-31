@@ -1,68 +1,114 @@
+import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:mailer/mailer.dart';
+import 'package:mailer/smtp_server/gmail.dart';
+import '../config/app_config.dart';
 import 'user_session.dart';
 
 class AuthService {
   static const String _allowedDomain = '@iitgn.ac.in';
-  final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _db = FirebaseFirestore.instance;
-
-  // The URL Firebase will redirect to after the user clicks the email link.
-  // Must be an authorized domain in Firebase Console → Authentication → Settings.
-  static const String _continueUrl =
-      'https://iitgn-campus-bike-rental.web.app/login';
 
   bool isValidEmail(String email) {
     return email.trim().toLowerCase().endsWith(_allowedDomain) &&
         email.trim().length > _allowedDomain.length;
   }
 
-  /// Sends a Firebase sign-in link to the given email.
+  // ─── OTP Generation ───────────────────────────────────────────────────────
+
+  String _generateOtp() {
+    final rng = Random.secure();
+    return (100000 + rng.nextInt(900000)).toString();
+  }
+
+  // ─── Send OTP ─────────────────────────────────────────────────────────────
+
   Future<bool> sendOtp(String email) async {
-    final actionCodeSettings = ActionCodeSettings(
-      url: _continueUrl,
-      handleCodeInApp: true,
-      androidPackageName: 'com.example.campus_bike_rental',
-      androidInstallApp: true,
-      androidMinimumVersion: '21',
-    );
-    await _auth.sendSignInLinkToEmail(
-      email: email,
-      actionCodeSettings: actionCodeSettings,
-    );
+    final otp = _generateOtp();
+    final expiry = DateTime.now().add(const Duration(minutes: 10));
+
+    // Store OTP in Firestore with expiry
+    await _db.collection('otps').doc(_sanitize(email)).set({
+      'otp': otp,
+      'email': email,
+      'expiresAt': Timestamp.fromDate(expiry),
+      'createdAt': Timestamp.now(),
+      'verified': false,
+    });
+
+    // Send email via Gmail SMTP
+    await _sendEmail(email, otp);
     return true;
   }
 
-  /// Completes sign-in using the email link the user clicked.
-  /// Call this from OtpScreen once the deep link is received.
-  Future<bool> signInWithEmailLink(String email, String emailLink) async {
-    if (!_auth.isSignInWithEmailLink(emailLink)) return false;
+  Future<void> _sendEmail(String toEmail, String otp) async {
+    final smtpServer = gmail(AppConfig.smtpUser, AppConfig.smtpPassword);
 
-    final credential = await _auth.signInWithEmailLink(
-      email: email,
-      emailLink: emailLink,
-    );
-    final user = credential.user;
-    if (user == null) return false;
+    final message = Message()
+      ..from = Address(AppConfig.smtpUser, AppConfig.otpSenderName)
+      ..recipients.add(toEmail)
+      ..subject = 'Your Campus Bike Rental OTP'
+      ..html = '''
+        <div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;
+                    padding:32px;border-radius:12px;background:#f9fbf0;">
+          <h2 style="color:#1B5E20;margin-bottom:8px;">Campus Bike Rental</h2>
+          <p style="color:#555;margin-bottom:24px;">IITGN · Eco-Friendly Commute</p>
+          <p style="color:#333;">Your one-time login code is:</p>
+          <div style="font-size:40px;font-weight:800;letter-spacing:12px;
+                      color:#2E7D32;text-align:center;padding:20px 0;">
+            $otp
+          </div>
+          <p style="color:#888;font-size:13px;">
+            This code expires in <strong>10 minutes</strong>.<br/>
+            Do not share this code with anyone.
+          </p>
+        </div>
+      ''';
 
-    await _createOrFetchUser(user.uid, email);
+    await send(message, smtpServer);
+  }
+
+  // ─── Verify OTP ───────────────────────────────────────────────────────────
+
+  Future<bool> verifyOtp(String email, String otp) async {
+    final doc = await _db.collection('otps').doc(_sanitize(email)).get();
+
+    if (!doc.exists) return false;
+    final d = doc.data()!;
+
+    // Check expiry
+    final expiresAt = (d['expiresAt'] as Timestamp).toDate();
+    if (DateTime.now().isAfter(expiresAt)) return false;
+
+    // Check already used
+    if (d['verified'] == true) return false;
+
+    // Check code
+    if (d['otp'] != otp) return false;
+
+    // Mark as used
+    await _db.collection('otps').doc(_sanitize(email)).update({'verified': true});
     return true;
   }
 
-  /// Creates user doc in Firestore on first login, or loads existing data.
-  Future<void> _createOrFetchUser(String uid, String email) async {
-    final docRef = _db.collection('users').doc(uid);
+  // ─── Login / Register ─────────────────────────────────────────────────────
+
+  /// Called after OTP is verified. Creates user doc on first login.
+  Future<Map<String, dynamic>> login(String email) async {
+    final userId = _sanitize(email);
+    final docRef = _db.collection('users').doc(userId);
     final doc = await docRef.get();
 
     if (doc.exists) {
       final d = doc.data()!;
       UserSession.set(
-        userId: uid,
+        userId: userId,
         name: d['name'] as String,
         email: email,
       );
+      return {'userId': userId, 'name': d['name'], 'email': email};
     } else {
-      final name = _nameFromEmail(email);
+      final name = nameFromEmail(email);
       await docRef.set({
         'name': name,
         'email': email,
@@ -72,27 +118,29 @@ class AuthService {
         'walletBalance': 0.0,
         'createdAt': Timestamp.now(),
       });
-      UserSession.set(userId: uid, name: name, email: email);
+      UserSession.set(userId: userId, name: name, email: email);
+      return {'userId': userId, 'name': name, 'email': email};
     }
   }
 
-  /// Derives display name from email.
-  /// e.g. "devraj.rawat@iitgn.ac.in" → "Devraj Rawat"
-  String nameFromEmail(String email) => _nameFromEmail(email);
+  Future<Map<String, dynamic>> register(String email) async => login(email);
 
-  String _nameFromEmail(String email) {
+  Future<void> logout() async => UserSession.clear();
+
+  // ─── Helpers ──────────────────────────────────────────────────────────────
+
+  /// "devraj.rawat@iitgn.ac.in" → "devraj_rawat"
+  String _sanitize(String email) =>
+      email.split('@').first.replaceAll('.', '_').toLowerCase();
+
+  /// "devraj.rawat@iitgn.ac.in" → "Devraj Rawat"
+  String nameFromEmail(String email) {
     final local = email.split('@').first;
     return local
         .split('.')
-        .map((p) => p.isNotEmpty ? '${p[0].toUpperCase()}${p.substring(1)}' : '')
+        .map((p) => p.isNotEmpty
+            ? '${p[0].toUpperCase()}${p.substring(1)}'
+            : '')
         .join(' ');
   }
-
-  Future<void> logout() async {
-    await _auth.signOut();
-    UserSession.clear();
-  }
-
-  // Keep for compatibility — verifyOtp is no longer used with email link
-  Future<bool> verifyOtp(String email, String otp) async => false;
 }

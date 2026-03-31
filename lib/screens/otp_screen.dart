@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/auth_service.dart';
 import 'home_screen.dart';
 
@@ -15,77 +15,86 @@ class OtpScreen extends StatefulWidget {
 }
 
 class _OtpScreenState extends State<OtpScreen> {
+  final List<TextEditingController> _controllers =
+      List.generate(6, (_) => TextEditingController());
+  final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
   final _authService = AuthService();
-  bool _isVerifying = false;
-  bool _linkReceived = false;
-  StreamSubscription<Uri>? _linkSub;
+  bool _isLoading = false;
+  int _resendSeconds = 60;
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
-    _listenForEmailLink();
+    _startTimer();
   }
 
-  /// Listens for the deep link when the user clicks the email link.
-  void _listenForEmailLink() {
-    final appLinks = AppLinks();
-
-    // App opened from background via the link
-    _linkSub = appLinks.uriLinkStream.listen((uri) {
-      _handleLink(uri.toString());
-    });
-
-    // App was cold-started by clicking the link
-    appLinks.getInitialLink().then((uri) {
-      if (uri != null) _handleLink(uri.toString());
+  void _startTimer() {
+    _timer?.cancel();
+    setState(() => _resendSeconds = 60);
+    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (_resendSeconds <= 0) {
+        t.cancel();
+      } else {
+        setState(() => _resendSeconds--);
+      }
     });
   }
 
-  Future<void> _handleLink(String link) async {
-    if (_linkReceived) return;
-    setState(() {
-      _linkReceived = true;
-      _isVerifying = true;
-    });
+  @override
+  void dispose() {
+    _timer?.cancel();
+    for (var c in _controllers) c.dispose();
+    for (var f in _focusNodes) f.dispose();
+    super.dispose();
+  }
 
+  String get _otp => _controllers.map((c) => c.text).join();
+
+  Future<void> _verify() async {
+    if (_otp.length != 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter the complete 6-digit OTP')),
+      );
+      return;
+    }
+    setState(() => _isLoading = true);
     try {
-      final success =
-          await _authService.signInWithEmailLink(widget.email, link);
+      final valid = await _authService.verifyOtp(widget.email, _otp);
       if (!mounted) return;
-      if (success) {
+      if (valid) {
+        await _authService.login(widget.email);
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (_) => const HomeScreen()),
           (_) => false,
         );
       } else {
-        setState(() {
-          _isVerifying = false;
-          _linkReceived = false;
-        });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Invalid link. Please try again.')),
+          const SnackBar(
+            content: Text('Invalid or expired OTP. Please try again.'),
+            backgroundColor: Color(0xFFD32F2F),
+          ),
         );
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _isVerifying = false;
-        _linkReceived = false;
-      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')),
       );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _resend() async {
-    setState(() => _isVerifying = true);
+    setState(() => _isLoading = true);
     try {
       await _authService.sendOtp(widget.email);
       if (!mounted) return;
+      _startTimer();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('New link sent! Check your inbox.')),
+        const SnackBar(content: Text('New OTP sent! Check your inbox.')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -93,14 +102,17 @@ class _OtpScreenState extends State<OtpScreen> {
         SnackBar(content: Text('Failed to resend: $e')),
       );
     } finally {
-      if (mounted) setState(() => _isVerifying = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  @override
-  void dispose() {
-    _linkSub?.cancel();
-    super.dispose();
+  void _onDigitChanged(int index, String value) {
+    if (value.isNotEmpty && index < 5) {
+      _focusNodes[index + 1].requestFocus();
+    } else if (value.isEmpty && index > 0) {
+      _focusNodes[index - 1].requestFocus();
+    }
+    setState(() {});
   }
 
   @override
@@ -109,12 +121,12 @@ class _OtpScreenState extends State<OtpScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF9FBF0),
       appBar: AppBar(
-        title: const Text('Check Your Email'),
+        title: const Text('Verify OTP'),
         backgroundColor: Colors.transparent,
         foregroundColor: const Color(0xFF2E7D32),
         elevation: 0,
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(28),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -131,20 +143,19 @@ class _OtpScreenState extends State<OtpScreen> {
             ),
             const SizedBox(height: 24),
             Text(
-              'Login Link Sent!',
+              'Check Your Email',
               style: theme.textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.w700,
                 color: const Color(0xFF1B5E20),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             Text(
-              'We sent a sign-in link to',
+              'We sent a 6-digit OTP to',
               style: theme.textTheme.bodyMedium
                   ?.copyWith(color: Colors.grey[600]),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 4),
             Text(
               widget.email,
               style: theme.textTheme.bodyMedium?.copyWith(
@@ -153,73 +164,132 @@ class _OtpScreenState extends State<OtpScreen> {
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 32),
-            // Status indicator
-            _isVerifying
-                ? Column(
-                    children: [
-                      const CircularProgressIndicator(
-                          color: Color(0xFF2E7D32)),
-                      const SizedBox(height: 16),
-                      Text(
-                        _linkReceived
-                            ? 'Verifying your link…'
-                            : 'Waiting for link…',
-                        style: TextStyle(
-                            color: Colors.grey[600], fontSize: 14),
-                      ),
-                    ],
-                  )
-                : Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF8E1),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFFFFE082)),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.info_outline_rounded,
-                            color: Color(0xFFF9A825), size: 20),
-                        SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'Open the email on this device and tap the link. The app will sign you in automatically.',
-                            style: TextStyle(
-                                fontSize: 13, color: Color(0xFF795548)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-            const SizedBox(height: 32),
-            const Divider(),
-            const SizedBox(height: 16),
-            Text(
-              "Didn't receive the email?",
-              style: TextStyle(color: Colors.grey[600], fontSize: 13),
-            ),
-            const SizedBox(height: 10),
-            OutlinedButton.icon(
-              onPressed: _isVerifying ? null : _resend,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Resend Link'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF2E7D32),
-                side: const BorderSide(color: Color(0xFF2E7D32)),
-                minimumSize: const Size(double.infinity, 50),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+            const SizedBox(height: 36),
+            // OTP boxes
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: List.generate(
+                6,
+                (i) => _OtpBox(
+                  controller: _controllers[i],
+                  focusNode: _focusNodes[i],
+                  onChanged: (v) => _onDigitChanged(i, v),
+                  autofocus: i == 0,
+                ),
               ),
             ),
-            const SizedBox(height: 12),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Change Email',
-                  style: TextStyle(color: Colors.grey)),
+            const SizedBox(height: 36),
+            ElevatedButton(
+              onPressed: _isLoading ? null : _verify,
+              child: _isLoading
+                  ? const SizedBox(
+                      height: 22,
+                      width: 22,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2.5, color: Colors.white),
+                    )
+                  : const Text('Verify & Continue'),
+            ),
+            const SizedBox(height: 20),
+            if (_resendSeconds > 0)
+              Text(
+                'Resend OTP in ${_resendSeconds}s',
+                style: TextStyle(color: Colors.grey[500]),
+              )
+            else
+              GestureDetector(
+                onTap: _isLoading ? null : _resend,
+                child: const Text(
+                  'Resend OTP',
+                  style: TextStyle(
+                    color: Color(0xFF2E7D32),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            const SizedBox(height: 24),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF8E1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFFFE082)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline_rounded,
+                      color: Color(0xFFF9A825), size: 18),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'OTP expires in 10 minutes. Check spam if you don\'t see it.',
+                      style:
+                          TextStyle(fontSize: 13, color: Color(0xFF795548)),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _OtpBox extends StatelessWidget {
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final ValueChanged<String> onChanged;
+  final bool autofocus;
+
+  const _OtpBox({
+    required this.controller,
+    required this.focusNode,
+    required this.onChanged,
+    this.autofocus = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 46,
+      height: 56,
+      child: TextFormField(
+        controller: controller,
+        focusNode: focusNode,
+        autofocus: autofocus,
+        maxLength: 1,
+        keyboardType: TextInputType.number,
+        textAlign: TextAlign.center,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        style: const TextStyle(
+          fontSize: 22,
+          fontWeight: FontWeight.w700,
+          color: Color(0xFF1B5E20),
+        ),
+        decoration: InputDecoration(
+          counterText: '',
+          filled: true,
+          fillColor: controller.text.isNotEmpty
+              ? const Color(0xFFE8F5E9)
+              : Colors.white,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide:
+                const BorderSide(color: Color(0xFF2E7D32), width: 2.5),
+          ),
+          contentPadding: EdgeInsets.zero,
+        ),
+        onChanged: onChanged,
       ),
     );
   }
