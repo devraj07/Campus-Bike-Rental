@@ -31,15 +31,15 @@ class MyBikeScreen extends StatelessWidget {
                 ),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: Column(
+              child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.pedal_bike_rounded, color: Colors.white70, size: 36),
-                  const SizedBox(height: 12),
-                  const Text('Earn from Your Bike',
+                  Icon(Icons.pedal_bike_rounded, color: Colors.white70, size: 36),
+                  SizedBox(height: 12),
+                  Text('Earn from Your Bike',
                       style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 6),
-                  const Text('List your personal cycle and let other students rent it. Earn Rs.8-10 per hour!',
+                  SizedBox(height: 6),
+                  Text('List your personal cycle and let other students rent it. Earn Rs.8-10 per hour!',
                       style: TextStyle(color: Colors.white70, fontSize: 13)),
                 ],
               ),

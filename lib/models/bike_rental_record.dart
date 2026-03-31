@@ -15,48 +15,24 @@ class BikeRentalRecord {
     required this.earnings,
   });
 
+  factory BikeRentalRecord.fromJson(Map<String, dynamic> json) {
+    return BikeRentalRecord(
+      id: json['id'] ?? 'ORH-000',
+      bikeId: json['bikeId'] ?? 'B000',
+      rentedBy: json['rentedBy'] ?? json['userName'] ?? 'Unknown',
+      date: DateTime.tryParse(json['date'] ?? '') ?? DateTime.now(),
+      duration: Duration(minutes: ((json['durationMinutes'] ?? 30) as num).toInt()),
+      earnings: ((json['earnings'] ?? json['amount'] ?? 0.0) as num).toDouble(),
+    );
+  }
+
   static List<BikeRentalRecord> sampleRecords() {
     return [
-      BikeRentalRecord(
-        id: 'ORH-001',
-        bikeId: 'B201',
-        rentedBy: 'Rahul Shah',
-        date: DateTime.now().subtract(const Duration(days: 1, hours: 3)),
-        duration: const Duration(minutes: 45),
-        earnings: 18.0,
-      ),
-      BikeRentalRecord(
-        id: 'ORH-002',
-        bikeId: 'B201',
-        rentedBy: 'Priya Mehta',
-        date: DateTime.now().subtract(const Duration(days: 2, hours: 5)),
-        duration: const Duration(hours: 1, minutes: 20),
-        earnings: 26.0,
-      ),
-      BikeRentalRecord(
-        id: 'ORH-003',
-        bikeId: 'B201',
-        rentedBy: 'Arjun Patel',
-        date: DateTime.now().subtract(const Duration(days: 4)),
-        duration: const Duration(minutes: 30),
-        earnings: 10.0,
-      ),
-      BikeRentalRecord(
-        id: 'ORH-004',
-        bikeId: 'B201',
-        rentedBy: 'Sneha Joshi',
-        date: DateTime.now().subtract(const Duration(days: 6, hours: 2)),
-        duration: const Duration(hours: 2),
-        earnings: 20.0,
-      ),
-      BikeRentalRecord(
-        id: 'ORH-005',
-        bikeId: 'B201',
-        rentedBy: 'Karan Verma',
-        date: DateTime.now().subtract(const Duration(days: 8)),
-        duration: const Duration(minutes: 55),
-        earnings: 18.0,
-      ),
+      BikeRentalRecord(id: 'ORH-001', bikeId: 'B201', rentedBy: 'Rahul Shah', date: DateTime.now().subtract(const Duration(days: 1, hours: 3)), duration: const Duration(minutes: 45), earnings: 18.0),
+      BikeRentalRecord(id: 'ORH-002', bikeId: 'B201', rentedBy: 'Priya Mehta', date: DateTime.now().subtract(const Duration(days: 2, hours: 5)), duration: const Duration(hours: 1, minutes: 20), earnings: 26.0),
+      BikeRentalRecord(id: 'ORH-003', bikeId: 'B201', rentedBy: 'Arjun Patel', date: DateTime.now().subtract(const Duration(days: 4)), duration: const Duration(minutes: 30), earnings: 10.0),
+      BikeRentalRecord(id: 'ORH-004', bikeId: 'B201', rentedBy: 'Sneha Joshi', date: DateTime.now().subtract(const Duration(days: 6, hours: 2)), duration: const Duration(hours: 2), earnings: 20.0),
+      BikeRentalRecord(id: 'ORH-005', bikeId: 'B201', rentedBy: 'Karan Verma', date: DateTime.now().subtract(const Duration(days: 8)), duration: const Duration(minutes: 55), earnings: 18.0),
     ];
   }
 }

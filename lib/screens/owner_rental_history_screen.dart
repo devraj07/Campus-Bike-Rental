@@ -273,42 +273,42 @@ class _OwnerRentalHistoryScreenState extends State<OwnerRentalHistoryScreen> {
       context: context,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (_) => Padding(
-        padding: const EdgeInsets.all(24),
+      builder: (_) => const Padding(
+        padding: EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Bike Status',
+            Text('Bike Status',
                 style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
                     color: Color(0xFF1B5E20))),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             _StatusRow(
                 icon: Icons.electric_bike_rounded,
                 label: 'Bike ID',
                 value: 'B201',
-                color: const Color(0xFF2E7D32)),
-            const Divider(height: 24),
+                color: Color(0xFF2E7D32)),
+            Divider(height: 24),
             _StatusRow(
                 icon: Icons.location_on_rounded,
                 label: 'Current Stand',
                 value: 'Academic Block A',
-                color: const Color(0xFF1565C0)),
-            const Divider(height: 24),
+                color: Color(0xFF1565C0)),
+            Divider(height: 24),
             _StatusRow(
                 icon: Icons.circle_rounded,
                 label: 'Status',
                 value: 'Available',
-                color: const Color(0xFF2E7D32)),
-            const Divider(height: 24),
+                color: Color(0xFF2E7D32)),
+            Divider(height: 24),
             _StatusRow(
                 icon: Icons.battery_charging_full_rounded,
                 label: 'Battery',
                 value: '78%',
-                color: const Color(0xFF2E7D32)),
-            const SizedBox(height: 20),
+                color: Color(0xFF2E7D32)),
+            SizedBox(height: 20),
           ],
         ),
       ),

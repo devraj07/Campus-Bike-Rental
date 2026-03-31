@@ -439,12 +439,12 @@ class _StaticCampusMap extends CustomPainter {
         Offset(size.width * 0.6, size.height * 0.7), roadPaint);
 
     final buildings = [
-      Rect.fromLTWH(10, 10, 80, 50),
-      Rect.fromLTWH(120, 60, 60, 40),
-      Rect.fromLTWH(200, 10, 70, 45),
-      Rect.fromLTWH(60, 100, 90, 55),
-      Rect.fromLTWH(180, 100, 65, 50),
-      Rect.fromLTWH(20, 140, 55, 40),
+      const Rect.fromLTWH(10, 10, 80, 50),
+      const Rect.fromLTWH(120, 60, 60, 40),
+      const Rect.fromLTWH(200, 10, 70, 45),
+      const Rect.fromLTWH(60, 100, 90, 55),
+      const Rect.fromLTWH(180, 100, 65, 50),
+      const Rect.fromLTWH(20, 140, 55, 40),
     ];
     for (final r in buildings) {
       canvas.drawRRect(

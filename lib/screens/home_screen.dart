@@ -205,10 +205,10 @@ class _HomeTabState extends State<_HomeTab> {
                     color: const Color(0xFF2E7D32),
                   ),
                   const SizedBox(width: 10),
-                  _StatChip(
+                  const _StatChip(
                     icon: Icons.location_on_rounded,
                     label: '6 Stations',
-                    color: const Color(0xFF1565C0),
+                    color: Color(0xFF1565C0),
                   ),
                 ],
               ),
