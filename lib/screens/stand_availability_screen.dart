@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../models/bike_state.dart';
-import '../models/bike.dart';
 import '../services/api_service.dart';
 import 'bike_details_screen.dart';
 
@@ -22,9 +21,7 @@ class _StandAvailabilityScreenState extends State<StandAvailabilityScreen> {
   }
 
   void _refresh() {
-    setState(() {
-      _standsFuture = ApiService().fetchStands();
-    });
+    setState(() { _standsFuture = ApiService().fetchStands(); });
   }
 
   @override
@@ -88,13 +85,15 @@ class _StandAvailabilityScreenState extends State<StandAvailabilityScreen> {
                           value: '$totalAvailable',
                           label: 'Bikes Available',
                         ),
-                        Container(width: 1, height: 40, color: Colors.white24),
+                        Container(
+                            width: 1, height: 40, color: Colors.white24),
                         _SummaryItem(
                           icon: Icons.location_on_rounded,
                           value: '${stands.length}',
                           label: 'Total Stands',
                         ),
-                        Container(width: 1, height: 40, color: Colors.white24),
+                        Container(
+                            width: 1, height: 40, color: Colors.white24),
                         _SummaryItem(
                           icon: Icons.check_circle_rounded,
                           value:
@@ -105,7 +104,8 @@ class _StandAvailabilityScreenState extends State<StandAvailabilityScreen> {
                     ),
                   ),
                 ),
-                // Info box
+
+                // Hint row
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -123,7 +123,7 @@ class _StandAvailabilityScreenState extends State<StandAvailabilityScreen> {
                           SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              'Walk to a nearby stand and scan the QR on any available bike to start your ride.',
+                              'Tap a stand to see available bikes and start your ride.',
                               style: TextStyle(
                                   fontSize: 12, color: Color(0xFF1565C0)),
                             ),
@@ -133,8 +133,9 @@ class _StandAvailabilityScreenState extends State<StandAvailabilityScreen> {
                     ),
                   ),
                 ),
+
                 const SliverToBoxAdapter(child: SizedBox(height: 16)),
-                // Section header
+
                 SliverPadding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   sliver: SliverToBoxAdapter(
@@ -146,90 +147,21 @@ class _StandAvailabilityScreenState extends State<StandAvailabilityScreen> {
                     ),
                   ),
                 ),
+
                 const SliverToBoxAdapter(child: SizedBox(height: 10)),
-                // Stand list
-                SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (ctx, i) => _StandCard(
-                      stand: stands[i],
-                      onTap: () => _showStandDetail(context, stands[i]),
-                    ),
-                    childCount: stands.length,
-                  ),
-                ),
-                // Campus map image placeholder
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Campus Stand Locations',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: const Color(0xFF1B5E20)),
-                        ),
-                        const SizedBox(height: 12),
-                        Container(
-                          height: 200,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFE8F5E9),
-                            borderRadius: BorderRadius.circular(16),
-                            border:
-                                Border.all(color: const Color(0xFFC8E6C9)),
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: Stack(
-                              children: [
-                                // Static campus map placeholder
-                                CustomPaint(
-                                  size: const Size(double.infinity, 200),
-                                  painter: _StaticCampusMap(),
-                                ),
-                                // Stand dots
-                                ..._buildStandDots(stands),
-                                // Legend
-                                Positioned(
-                                  bottom: 12,
-                                  right: 12,
-                                  child: Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.9),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: const Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        _LegendDot(
-                                            color: Color(0xFF2E7D32),
-                                            label: 'Has bikes'),
-                                        SizedBox(height: 4),
-                                        _LegendDot(
-                                            color: Color(0xFFD32F2F),
-                                            label: 'Empty'),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Static campus map — stands are at fixed locations',
-                          style: TextStyle(color: Colors.grey, fontSize: 11),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
+
+                // Expandable stand cards
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (ctx, i) => _StandExpansionCard(stand: stands[i]),
+                      childCount: stands.length,
                     ),
                   ),
                 ),
-                const SliverToBoxAdapter(child: SizedBox(height: 20)),
+
+                const SliverToBoxAdapter(child: SizedBox(height: 24)),
               ],
             ),
           );
@@ -237,394 +169,207 @@ class _StandAvailabilityScreenState extends State<StandAvailabilityScreen> {
       ),
     );
   }
+}
 
-  List<Widget> _buildStandDots(List<StandAvailability> stands) {
-    final positions = [
-      [0.25, 0.3],
-      [0.45, 0.55],
-      [0.7, 0.2],
-      [0.2, 0.7],
-      [0.8, 0.75],
-      [0.55, 0.85],
-    ];
-    return List.generate(stands.length, (i) {
-      final stand = stands[i];
-      final pos = positions[i];
-      return LayoutBuilder(builder: (ctx, constraints) {
-        return Positioned(
-          left: pos[0] * constraints.maxWidth - 12,
-          top: pos[1] * 200 - 12,
-          child: GestureDetector(
-            onTap: () => _showStandDetail(context, stand),
-            child: Container(
-              width: 24,
-              height: 24,
-              decoration: BoxDecoration(
-                color: stand.availableBikes > 0
-                    ? const Color(0xFF2E7D32)
-                    : const Color(0xFFD32F2F),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 2),
-                boxShadow: [
-                  BoxShadow(
-                    color: (stand.availableBikes > 0
-                            ? const Color(0xFF2E7D32)
-                            : const Color(0xFFD32F2F))
-                        .withOpacity(0.4),
-                    blurRadius: 6,
+// ── Expandable stand card ────────────────────────────────────────────────────
+
+class _StandExpansionCard extends StatefulWidget {
+  final StandAvailability stand;
+  const _StandExpansionCard({required this.stand});
+
+  @override
+  State<_StandExpansionCard> createState() => _StandExpansionCardState();
+}
+
+class _StandExpansionCardState extends State<_StandExpansionCard> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final stand = widget.stand;
+    final hasAvailable = stand.availableBikes > 0;
+    final availColor =
+        hasAvailable ? const Color(0xFF2E7D32) : const Color(0xFFD32F2F);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: _expanded
+              ? const Color(0xFF2E7D32)
+              : const Color(0xFFE0E0E0),
+          width: _expanded ? 1.5 : 1,
+        ),
+        boxShadow: const [
+          BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))
+        ],
+      ),
+      child: Column(
+        children: [
+          // Header — always visible
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            borderRadius: BorderRadius.vertical(
+              top: const Radius.circular(16),
+              bottom: Radius.circular(_expanded ? 0 : 16),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: availColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(Icons.location_on_rounded,
+                        color: availColor, size: 22),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          stand.standName,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                              color: Color(0xFF1B5E20)),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          stand.description,
+                          style: const TextStyle(
+                              color: Colors.grey, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Bikes available badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: availColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '${stand.availableBikes} bike${stand.availableBikes == 1 ? '' : 's'}',
+                      style: TextStyle(
+                          color: availColor,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  AnimatedRotation(
+                    turns: _expanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: const Icon(Icons.keyboard_arrow_down_rounded,
+                        color: Colors.grey),
                   ),
                 ],
               ),
-              child: Center(
-                child: Text(
-                  '${stand.availableBikes}',
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800),
-                ),
-              ),
             ),
           ),
-        );
-      });
-    });
-  }
 
-  void _showStandDetail(BuildContext context, StandAvailability stand) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (_) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        minChildSize: 0.4,
-        maxChildSize: 0.9,
-        expand: false,
-        builder: (_, controller) => ListView(
-          controller: controller,
-          padding: const EdgeInsets.all(24),
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
+          // Dropdown — bikes list
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 220),
+            crossFadeState: _expanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            firstChild: const SizedBox.shrink(),
+            secondChild: Column(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: stand.availableBikes > 0
-                        ? const Color(0xFFE8F5E9)
-                        : const Color(0xFFFFEBEE),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(Icons.location_on_rounded,
-                      color: stand.availableBikes > 0
-                          ? const Color(0xFF2E7D32)
-                          : const Color(0xFFD32F2F),
-                      size: 24),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(stand.standName,
-                          style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF1B5E20))),
-                      Text(stand.description,
-                          style: const TextStyle(
-                              color: Colors.grey, fontSize: 13)),
+                      // Slot info row
+                      Row(
+                        children: [
+                          const Icon(Icons.grid_view_rounded,
+                              size: 14, color: Colors.grey),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${stand.totalSlots} total slots',
+                            style: const TextStyle(
+                                color: Colors.grey, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      if (hasAvailable) ...[
+                        ...stand.availableBikeIds
+                            .map((id) => _BikeTile(bikeId: id)),
+                      ] else
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFEBEE),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.do_not_disturb_rounded,
+                                  color: Color(0xFFD32F2F), size: 18),
+                              SizedBox(width: 10),
+                              Text('No bikes available at this stand.',
+                                  style:
+                                      TextStyle(color: Color(0xFFD32F2F))),
+                            ],
+                          ),
+                        ),
                     ],
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                _InfoPill(
-                  label: '${stand.availableBikes} available',
-                  color: stand.availableBikes > 0
-                      ? const Color(0xFF2E7D32)
-                      : const Color(0xFFD32F2F),
-                ),
-                const SizedBox(width: 8),
-                _InfoPill(
-                  label: '${stand.totalSlots} total slots',
-                  color: const Color(0xFF1565C0),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            if (stand.availableBikes > 0) ...[
-              const Text('Available Bikes',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF1B5E20),
-                      fontSize: 15)),
-              const SizedBox(height: 12),
-              ...stand.availableBikeIds.map((bikeId) => _BikeTile(
-                    bikeId: bikeId,
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => BikeDetailsScreen(
-                            bike: Bike(
-                              id: bikeId,
-                              station: stand.standName,
-                              isAvailable: true,
-                              batteryLevel: 75,
-                              pricePerHour: 10.0,
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  )),
-            ] else
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFEBEE),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.info_outline_rounded,
-                        color: Color(0xFFD32F2F), size: 20),
-                    SizedBox(width: 10),
-                    Text('No bikes available at this stand.',
-                        style: TextStyle(color: Color(0xFFD32F2F))),
-                  ],
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _StaticCampusMap extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final roadPaint = Paint()
-      ..color = const Color(0xFFBDBDBD)
-      ..strokeWidth = 5
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-    final buildingPaint = Paint()..color = const Color(0xFFC8E6C9);
-
-    canvas.drawLine(Offset(0, size.height * 0.45),
-        Offset(size.width, size.height * 0.45), roadPaint);
-    canvas.drawLine(Offset(size.width * 0.45, 0),
-        Offset(size.width * 0.45, size.height), roadPaint);
-    canvas.drawLine(Offset(0, size.height * 0.25),
-        Offset(size.width * 0.7, size.height * 0.25), roadPaint);
-    canvas.drawLine(Offset(0, size.height * 0.7),
-        Offset(size.width * 0.6, size.height * 0.7), roadPaint);
-
-    final buildings = [
-      Rect.fromLTWH(10, 10, 80, 50),
-      Rect.fromLTWH(120, 60, 60, 40),
-      Rect.fromLTWH(200, 10, 70, 45),
-      Rect.fromLTWH(60, 100, 90, 55),
-      Rect.fromLTWH(180, 100, 65, 50),
-      Rect.fromLTWH(20, 140, 55, 40),
-    ];
-    for (final r in buildings) {
-      canvas.drawRRect(
-          RRect.fromRectAndRadius(r, const Radius.circular(4)), buildingPaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_) => false;
-}
-
-class _StandCard extends StatelessWidget {
-  final StandAvailability stand;
-  final VoidCallback onTap;
-
-  const _StandCard({required this.stand, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final hasAvailable = stand.availableBikes > 0;
-    return GestureDetector(
-      onTap: onTap,
-      child: Card(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: hasAvailable
-                      ? const Color(0xFFE8F5E9)
-                      : const Color(0xFFFFEBEE),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Center(
-                  child: Text(
-                    '${stand.availableBikes}',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: hasAvailable
-                          ? const Color(0xFF2E7D32)
-                          : const Color(0xFFD32F2F),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      stand.standName,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                          color: Color(0xFF1B5E20)),
-                    ),
-                    const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        const Icon(Icons.info_outline_rounded,
-                            size: 13, color: Colors.grey),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            stand.description,
-                            style: const TextStyle(
-                                color: Colors.grey, fontSize: 12),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: hasAvailable
-                                ? const Color(0xFFE8F5E9)
-                                : const Color(0xFFFFEBEE),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            hasAvailable
-                                ? '${stand.availableBikes} cycles available'
-                                : 'No cycles available',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: hasAvailable
-                                  ? const Color(0xFF2E7D32)
-                                  : const Color(0xFFD32F2F),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '${stand.totalSlots} slots total',
-                          style: const TextStyle(
-                              color: Colors.grey, fontSize: 11),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right_rounded, color: Colors.grey),
-            ],
           ),
-        ),
+        ],
       ),
     );
   }
 }
 
-class _SummaryItem extends StatelessWidget {
-  final IconData icon;
-  final String value;
-  final String label;
+// ── Bike tile inside a stand dropdown ────────────────────────────────────────
 
-  const _SummaryItem(
-      {required this.icon, required this.value, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Icon(icon, color: Colors.white70, size: 20),
-        const SizedBox(height: 4),
-        Text(value,
-            style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-                fontSize: 20)),
-        Text(label,
-            style: const TextStyle(color: Colors.white70, fontSize: 11)),
-      ],
-    );
-  }
-}
-
-class _InfoPill extends StatelessWidget {
-  final String label;
-  final Color color;
-
-  const _InfoPill({required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(label,
-          style: TextStyle(
-              color: color, fontWeight: FontWeight.w600, fontSize: 13)),
-    );
-  }
-}
-
-class _BikeTile extends StatelessWidget {
+class _BikeTile extends StatefulWidget {
   final String bikeId;
-  final VoidCallback onTap;
+  const _BikeTile({required this.bikeId});
 
-  const _BikeTile({required this.bikeId, required this.onTap});
+  @override
+  State<_BikeTile> createState() => _BikeTileState();
+}
+
+class _BikeTileState extends State<_BikeTile> {
+  bool _loading = false;
+
+  Future<void> _onTap() async {
+    setState(() => _loading = true);
+    final bike = await ApiService().fetchBikeById(widget.bikeId);
+    if (!mounted) return;
+    setState(() => _loading = false);
+    if (bike == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => BikeDetailsScreen(bike: bike)),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: _loading ? null : _onTap,
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -638,15 +383,25 @@ class _BikeTile extends StatelessWidget {
             const Icon(Icons.electric_bike_rounded,
                 color: Color(0xFF2E7D32), size: 20),
             const SizedBox(width: 10),
-            Text(bikeId,
-                style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1B5E20))),
+            Text(
+              widget.bikeId,
+              style: const TextStyle(
+                  fontWeight: FontWeight.w600, color: Color(0xFF1B5E20)),
+            ),
             const Spacer(),
-            const Text('Tap to book',
-                style: TextStyle(color: Colors.grey, fontSize: 12)),
-            const Icon(Icons.chevron_right_rounded,
-                color: Colors.grey, size: 18),
+            if (_loading)
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Color(0xFF2E7D32)),
+              )
+            else ...[
+              const Text('Tap to book',
+                  style: TextStyle(color: Colors.grey, fontSize: 12)),
+              const Icon(Icons.chevron_right_rounded,
+                  color: Colors.grey, size: 18),
+            ],
           ],
         ),
       ),
@@ -654,23 +409,28 @@ class _BikeTile extends StatelessWidget {
   }
 }
 
-class _LegendDot extends StatelessWidget {
-  final Color color;
-  final String label;
+// ── Shared widgets ────────────────────────────────────────────────────────────
 
-  const _LegendDot({required this.color, required this.label});
+class _SummaryItem extends StatelessWidget {
+  final IconData icon;
+  final String value;
+  final String label;
+  const _SummaryItem(
+      {required this.icon, required this.value, required this.label});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
+    return Column(
       children: [
-        Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-        const SizedBox(width: 4),
-        Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+        Icon(icon, color: Colors.white70, size: 22),
+        const SizedBox(height: 6),
+        Text(value,
+            style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: 22)),
+        Text(label,
+            style: const TextStyle(color: Colors.white70, fontSize: 11)),
       ],
     );
   }

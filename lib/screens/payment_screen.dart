@@ -1,13 +1,16 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
+import '../config/app_config.dart';
 import '../models/bike.dart';
 import '../services/api_service.dart';
+import '../services/user_session.dart';
 import 'home_screen.dart';
 
 class PaymentScreen extends StatefulWidget {
   final Bike bike;
   final String rideId;
   final Duration duration;
-  final double distanceKm;
   final double cost;
 
   const PaymentScreen({
@@ -15,7 +18,6 @@ class PaymentScreen extends StatefulWidget {
     required this.bike,
     required this.rideId,
     required this.duration,
-    required this.distanceKm,
     required this.cost,
   });
 
@@ -27,7 +29,139 @@ class _PaymentScreenState extends State<PaymentScreen> {
   String _selectedMethod = 'UPI';
   bool _paying = false;
   bool _paid = false;
+  late final Razorpay _razorpay;
   final _api = ApiService();
+
+  @override
+  void initState() {
+    super.initState();
+    _razorpay = Razorpay();
+    _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
+    _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
+    _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
+  }
+
+  @override
+  void dispose() {
+    _razorpay.clear();
+    super.dispose();
+  }
+
+  // ── Razorpay handlers ────────────────────────────────────────────────────
+
+  void _handlePaymentSuccess(PaymentSuccessResponse response) {
+    _completePayment(razorpayPaymentId: response.paymentId);
+  }
+
+  void _handlePaymentError(PaymentFailureResponse response) {
+    if (!mounted) return;
+    setState(() => _paying = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(response.message ?? 'Payment failed. Please try again.'),
+        backgroundColor: const Color(0xFFD32F2F),
+      ),
+    );
+  }
+
+  void _handleExternalWallet(ExternalWalletResponse response) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('External wallet selected: ${response.walletName}'),
+      ),
+    );
+  }
+
+  // ── Payment logic ────────────────────────────────────────────────────────
+
+  void _openRazorpay() {
+    // Razorpay requires amount in paise; minimum is ₹1 (100 paise)
+    final amountPaise = max(100, (widget.cost * 100).toInt());
+    final options = <String, dynamic>{
+      'key': AppConfig.razorpayKeyId,
+      'amount': amountPaise,
+      'currency': 'INR',
+      'name': 'Campus Bike Rental – IITGN',
+      'description': '${widget.bike.id} · ${_formatDuration(widget.duration)}',
+      'prefill': {
+        'contact': '9000000000',
+        'email': UserSession.email,
+        if (_selectedMethod == 'UPI') 'method': 'upi',
+        if (_selectedMethod == 'CARD') 'method': 'card',
+      },
+      'theme': {'color': '#2E7D32'},
+    };
+    try {
+      _razorpay.open(options);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _paying = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open payment checkout.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _completePayment({String? razorpayPaymentId}) async {
+    if (!mounted) return;
+    setState(() => _paying = true);
+    try {
+      await _api.processPayment(
+        rideId: widget.rideId,
+        bikeId: widget.bike.id,
+        amount: widget.cost,
+        method: _selectedMethod,
+        razorpayPaymentId: razorpayPaymentId,
+      );
+      if (!mounted) return;
+      setState(() => _paid = true);
+      await Future.delayed(const Duration(seconds: 2));
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        (_) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error recording payment: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _paying = false);
+    }
+  }
+
+  Future<void> _pay() async {
+    if (_selectedMethod == 'WALLET') {
+      if (UserSession.walletBalance < widget.cost) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Insufficient balance. '
+              'Need ₹${widget.cost.toStringAsFixed(2)}, '
+              'have ₹${UserSession.walletBalance.toStringAsFixed(2)}.',
+            ),
+            backgroundColor: const Color(0xFFD32F2F),
+          ),
+        );
+        return;
+      }
+      await _completePayment();
+    } else if (!AppConfig.razorpayEnabled) {
+      // Razorpay disabled — simulate instant success for testing
+      await _completePayment();
+    } else {
+      // UPI or CARD — open Razorpay checkout
+      setState(() => _paying = true);
+      _openRazorpay();
+      // _paying reset in success/error callbacks
+    }
+  }
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
 
   String _formatDuration(Duration d) {
     final m = d.inMinutes;
@@ -36,33 +170,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
     return '${m}m ${s}s';
   }
 
-  Future<void> _pay() async {
-    setState(() => _paying = true);
-    try {
-      final success = await _api.processPayment(
-        rideId: widget.rideId,
-        amount: widget.cost,
-        method: _selectedMethod,
-      );
-      if (!mounted) return;
-      if (success) {
-        setState(() => _paid = true);
-        await Future.delayed(const Duration(seconds: 2));
-        if (!mounted) return;
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-          (_) => false,
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _paying = false);
-    }
-  }
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     if (_paid) {
       return Scaffold(
         backgroundColor: const Color(0xFFF9FBF0),
@@ -86,8 +197,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       fontWeight: FontWeight.w700,
                       color: Color(0xFF1B5E20))),
               const SizedBox(height: 8),
-              Text('₹${widget.cost.toStringAsFixed(2)} paid via $_selectedMethod',
-                  style: TextStyle(color: Colors.grey[600])),
+              Text(
+                '₹${widget.cost.toStringAsFixed(2)} paid via $_selectedMethod',
+                style: TextStyle(color: Colors.grey[600]),
+              ),
               const SizedBox(height: 16),
               const CircularProgressIndicator(color: Color(0xFF2E7D32)),
             ],
@@ -96,6 +209,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       );
     }
 
+    final theme = Theme.of(context);
     return Scaffold(
       backgroundColor: const Color(0xFFF9FBF0),
       appBar: AppBar(
@@ -139,9 +253,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     const SizedBox(height: 10),
                     _SummaryRow('Duration', _formatDuration(widget.duration)),
                     const SizedBox(height: 10),
-                    _SummaryRow('Distance',
-                        '${widget.distanceKm.toStringAsFixed(2)} km'),
-                    const SizedBox(height: 10),
                     _SummaryRow('Rate',
                         '₹${widget.bike.pricePerHour.toInt()}/hour'),
                     const SizedBox(height: 16),
@@ -172,17 +283,17 @@ class _PaymentScreenState extends State<PaymentScreen> {
             const SizedBox(height: 24),
             Text(
               'Payment Method',
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w700, color: const Color(0xFF1B5E20)),
+              style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF1B5E20)),
             ),
             const SizedBox(height: 12),
-            // Payment Methods
             _PaymentOption(
               value: 'UPI',
               groupValue: _selectedMethod,
               icon: Icons.account_balance_wallet_rounded,
               label: 'UPI',
-              subtitle: 'GPay, PhonePe, BHIM',
+              subtitle: 'GPay, PhonePe, BHIM – via Razorpay',
               color: const Color(0xFF6A1B9A),
               onChanged: (v) => setState(() => _selectedMethod = v!),
             ),
@@ -191,7 +302,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
               groupValue: _selectedMethod,
               icon: Icons.wallet_rounded,
               label: 'Campus Wallet',
-              subtitle: 'Balance: ₹120.00',
+              subtitle:
+                  'Balance: ₹${UserSession.walletBalance.toStringAsFixed(2)}',
               color: const Color(0xFF1565C0),
               onChanged: (v) => setState(() => _selectedMethod = v!),
             ),
@@ -200,7 +312,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               groupValue: _selectedMethod,
               icon: Icons.credit_card_rounded,
               label: 'Credit / Debit Card',
-              subtitle: 'Visa, Mastercard, RuPay',
+              subtitle: 'Indian cards only (Visa, Mastercard, RuPay)',
               color: const Color(0xFFAD1457),
               onChanged: (v) => setState(() => _selectedMethod = v!),
             ),
@@ -214,22 +326,19 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       child: CircularProgressIndicator(
                           strokeWidth: 2.5, color: Colors.white))
                   : const Icon(Icons.payment_rounded),
-              label: Text(_paying
-                  ? 'Processing…'
-                  : 'Pay ₹${widget.cost.toStringAsFixed(2)}'),
+              label: Text(
+                  _paying ? 'Processing…' : 'Pay ₹${widget.cost.toStringAsFixed(2)}'),
             ),
             const SizedBox(height: 12),
             Center(
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.lock_rounded,
-                      size: 14, color: Colors.grey),
+                  const Icon(Icons.lock_rounded, size: 14, color: Colors.grey),
                   const SizedBox(width: 4),
                   Text(
-                    'Secured by IITGN Payment Gateway',
-                    style:
-                        TextStyle(color: Colors.grey[500], fontSize: 12),
+                    'Payments secured by Razorpay',
+                    style: TextStyle(color: Colors.grey[500], fontSize: 12),
                   ),
                 ],
               ),
@@ -253,8 +362,7 @@ class _SummaryRow extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label, style: const TextStyle(color: Colors.grey)),
-        Text(value,
-            style: const TextStyle(fontWeight: FontWeight.w600)),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
       ],
     );
   }
@@ -288,7 +396,7 @@ class _PaymentOption extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: selected ? color.withOpacity(0.07) : Colors.white,
+          color: selected ? color.withValues(alpha: 0.07) : Colors.white,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: selected ? color : const Color(0xFFE0E0E0),
@@ -300,7 +408,7 @@ class _PaymentOption extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
+                color: color.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(icon, color: color, size: 22),
@@ -315,8 +423,8 @@ class _PaymentOption extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                           color: selected ? color : Colors.black87)),
                   Text(subtitle,
-                      style: const TextStyle(
-                          color: Colors.grey, fontSize: 12)),
+                      style:
+                          const TextStyle(color: Colors.grey, fontSize: 12)),
                 ],
               ),
             ),

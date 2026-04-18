@@ -6,4 +6,7 @@ class AppConfig {
   static const String smtpUser = 'YOUR_PROJECT_GMAIL@gmail.com';
   static const String smtpPassword = 'YOUR_16_CHAR_APP_PASSWORD';
   static const String otpSenderName = 'Campus Bike Rental – IITGN';
+
+  /// Razorpay key ID. Use rzp_test_* for test mode, rzp_live_* for production.
+  static const String razorpayKeyId = 'rzp_test_YOUR_KEY_HERE';
 }

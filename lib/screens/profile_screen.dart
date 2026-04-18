@@ -57,7 +57,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           final email = profile['email'] as String;
           final totalRides = profile['totalRides'] as int;
           final totalSpent = profile['totalSpent'] as double;
-          final co2Grams = profile['co2SavedGrams'] as double;
           final walletBalance = profile['walletBalance'] as double;
 
           return SingleChildScrollView(
@@ -108,7 +107,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Text(
                         email,
                         style: TextStyle(
-                            color: Colors.white.withOpacity(0.8), fontSize: 13),
+                            color: Colors.white.withValues(alpha: 0.8), fontSize: 13),
                       ),
                       const SizedBox(height: 16),
                       // Stats row
@@ -120,10 +119,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               width: 1, height: 40, color: Colors.white30,
                               margin: const EdgeInsets.symmetric(horizontal: 20)),
                           _ProfileStat(label: 'Spent', value: '₹${totalSpent.toStringAsFixed(0)}'),
-                          Container(
-                              width: 1, height: 40, color: Colors.white30,
-                              margin: const EdgeInsets.symmetric(horizontal: 20)),
-                          _ProfileStat(label: 'CO₂ Saved', value: '${co2Grams}g'),
                         ],
                       ),
                     ],
@@ -352,7 +347,7 @@ class _MenuItem extends StatelessWidget {
       leading: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: iconColor.withOpacity(0.1),
+          color: iconColor.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Icon(icon, color: iconColor, size: 20),

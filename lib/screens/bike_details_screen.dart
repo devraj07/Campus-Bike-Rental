@@ -1,21 +1,48 @@
 import 'package:flutter/material.dart';
 import '../models/bike.dart';
-import '../services/api_service.dart';
 import 'unlock_pin_screen.dart';
 
 class BikeDetailsScreen extends StatelessWidget {
   final Bike bike;
   const BikeDetailsScreen({super.key, required this.bike});
 
-  Color _batteryColor(int level) {
-    if (level >= 60) return const Color(0xFF2E7D32);
-    if (level >= 30) return const Color(0xFFFFA000);
-    return const Color(0xFFD32F2F);
+  Widget _bikePlaceholder(Bike b) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const SizedBox(height: 40),
+          Container(
+            padding: const EdgeInsets.all(30),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              b.type == 'Electric'
+                  ? Icons.electric_bike_rounded
+                  : Icons.directions_bike_rounded,
+              color: Colors.white,
+              size: 72,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            b.id,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 2,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Scaffold(
       backgroundColor: const Color(0xFFF9FBF0),
       body: CustomScrollView(
@@ -33,38 +60,43 @@ class BikeDetailsScreen extends StatelessWidget {
                     colors: [Color(0xFF1B5E20), Color(0xFF4CAF50)],
                   ),
                 ),
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const SizedBox(height: 40),
-                      Container(
-                        padding: const EdgeInsets.all(30),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.15),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          bike.type == 'Electric'
-                              ? Icons.electric_bike_rounded
-                              : Icons.directions_bike_rounded,
-                          color: Colors.white,
-                          size: 72,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        bike.id,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 2,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                child: bike.imageUrl.isNotEmpty
+                    ? Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Image.network(
+                            bike.imageUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => _bikePlaceholder(bike),
+                          ),
+                          // Dark gradient overlay so the bike ID stays readable
+                          Container(
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [Colors.transparent, Colors.black54],
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 16,
+                            left: 0,
+                            right: 0,
+                            child: Text(
+                              bike.id,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 2,
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    : _bikePlaceholder(bike),
               ),
             ),
           ),
@@ -117,6 +149,15 @@ class BikeDetailsScreen extends StatelessWidget {
                       padding: const EdgeInsets.all(20),
                       child: Column(
                         children: [
+                          if (bike.ownerName.isNotEmpty) ...[
+                            _DetailRow(
+                              icon: Icons.person_rounded,
+                              label: 'Owner',
+                              value: bike.ownerName,
+                              iconColor: const Color(0xFF6A1B9A),
+                            ),
+                            const Divider(height: 28),
+                          ],
                           _DetailRow(
                             icon: Icons.location_on_rounded,
                             label: 'Station',
@@ -126,29 +167,16 @@ class BikeDetailsScreen extends StatelessWidget {
                           const Divider(height: 28),
                           _DetailRow(
                             icon: Icons.category_rounded,
-                            label: 'Bike Type',
+                            label: 'Type',
                             value: bike.type,
                             iconColor: const Color(0xFF7B1FA2),
                           ),
-                          if (bike.type == 'Electric') ...[
-                            const Divider(height: 28),
-                            _BatteryRow(
-                                level: bike.batteryLevel,
-                                color: _batteryColor(bike.batteryLevel)),
-                          ],
                           const Divider(height: 28),
                           _DetailRow(
                             icon: Icons.currency_rupee_rounded,
-                            label: 'Price',
+                            label: 'Rate',
                             value: '₹${bike.pricePerHour.toInt()} / hour',
                             iconColor: const Color(0xFF2E7D32),
-                          ),
-                          const Divider(height: 28),
-                          _DetailRow(
-                            icon: Icons.near_me_rounded,
-                            label: 'Distance',
-                            value: '${bike.distanceKm} km away',
-                            iconColor: const Color(0xFFF57C00),
                           ),
                         ],
                       ),
@@ -219,7 +247,6 @@ class _StartRideButton extends StatefulWidget {
 
 class _StartRideButtonState extends State<_StartRideButton> {
   bool _loading = false;
-  final _api = ApiService();
 
   Future<void> _start() async {
     setState(() => _loading = true);
@@ -273,7 +300,7 @@ class _DetailRow extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: iconColor.withOpacity(0.1),
+            color: iconColor.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(icon, color: iconColor, size: 20),
@@ -288,62 +315,6 @@ class _DetailRow extends StatelessWidget {
                 style: const TextStyle(
                     fontWeight: FontWeight.w600, fontSize: 15)),
           ],
-        ),
-      ],
-    );
-  }
-}
-
-class _BatteryRow extends StatelessWidget {
-  final int level;
-  final Color color;
-
-  const _BatteryRow({required this.level, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child:
-              Icon(Icons.battery_charging_full_rounded, color: color, size: 20),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Battery Level',
-                  style: TextStyle(color: Colors.grey, fontSize: 12)),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        value: level / 100,
-                        backgroundColor: Colors.grey[200],
-                        color: color,
-                        minHeight: 8,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    '$level%',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w700, color: color, fontSize: 14),
-                  ),
-                ],
-              ),
-            ],
-          ),
         ),
       ],
     );

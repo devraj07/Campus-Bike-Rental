@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../services/api_service.dart';
 
 class OwnerPinSetupScreen extends StatefulWidget {
   final String bikeId;
@@ -49,12 +50,16 @@ class _OwnerPinSetupScreenState extends State<OwnerPinSetupScreen> {
       return;
     }
     setState(() => _saving = true);
-    await Future.delayed(const Duration(seconds: 1));
-    if (!mounted) return;
-    setState(() {
-      _saving = false;
-      _pinSaved = true;
-    });
+    try {
+      await ApiService().saveOwnerPin(widget.bikeId, _pin);
+      if (!mounted) return;
+      setState(() => _pinSaved = true);
+    } catch (e) {
+      if (!mounted) return;
+      _showError('Failed to save PIN. Please try again.');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   void _showError(String msg) {

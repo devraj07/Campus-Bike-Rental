@@ -7,12 +7,6 @@ class BikeCard extends StatelessWidget {
 
   const BikeCard({super.key, required this.bike, this.onTap});
 
-  Color _batteryColor(int level) {
-    if (level >= 60) return const Color(0xFF2E7D32);
-    if (level >= 30) return const Color(0xFFFFA000);
-    return const Color(0xFFD32F2F);
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -83,19 +77,6 @@ class BikeCard extends StatelessWidget {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        if (bike.type == 'Electric') ...[
-                          Icon(Icons.battery_charging_full_rounded,
-                              size: 16, color: _batteryColor(bike.batteryLevel)),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${bike.batteryLevel}%',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: _batteryColor(bike.batteryLevel),
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                        ],
                         Icon(Icons.currency_rupee_rounded,
                             size: 14, color: theme.colorScheme.primary),
                         Text(
@@ -103,16 +84,6 @@ class BikeCard extends StatelessWidget {
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.primary,
                             fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const Spacer(),
-                        Icon(Icons.near_me_rounded,
-                            size: 14, color: const Color(0xFF9E9E9E)),
-                        const SizedBox(width: 2),
-                        Text(
-                          '${bike.distanceKm} km',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: const Color(0xFF9E9E9E),
                           ),
                         ),
                       ],

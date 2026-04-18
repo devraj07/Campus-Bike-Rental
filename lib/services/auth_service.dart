@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:mailer/mailer.dart';
 import 'package:mailer/smtp_server/gmail.dart';
 import '../config/app_config.dart';
+import 'session_service.dart';
 import 'user_session.dart';
 
 class AuthService {
@@ -105,7 +106,9 @@ class AuthService {
         userId: userId,
         name: d['name'] as String,
         email: email,
+        walletBalance: (d['walletBalance'] as num?)?.toDouble() ?? 0.0,
       );
+      await SessionService.saveEmail(email);
       return {'userId': userId, 'name': d['name'], 'email': email};
     } else {
       final name = nameFromEmail(email);
@@ -114,18 +117,41 @@ class AuthService {
         'email': email,
         'totalRides': 0,
         'totalSpent': 0.0,
-        'co2SavedGrams': 0.0,
         'walletBalance': 0.0,
         'createdAt': Timestamp.now(),
       });
-      UserSession.set(userId: userId, name: name, email: email);
+      UserSession.set(userId: userId, name: name, email: email, walletBalance: 0.0);
+      await SessionService.saveEmail(email);
       return {'userId': userId, 'name': name, 'email': email};
     }
   }
 
   Future<Map<String, dynamic>> register(String email) async => login(email);
 
-  Future<void> logout() async => UserSession.clear();
+  Future<void> logout() async {
+    await SessionService.clearSession();
+    UserSession.clear();
+  }
+
+  /// Restores UserSession from Firestore using a previously saved email.
+  /// Returns true if the session was successfully restored.
+  Future<bool> restoreSession(String email) async {
+    try {
+      final userId = _sanitize(email);
+      final doc = await _db.collection('users').doc(userId).get();
+      if (!doc.exists) return false;
+      final d = doc.data()!;
+      UserSession.set(
+        userId: userId,
+        name: d['name'] as String,
+        email: email,
+        walletBalance: (d['walletBalance'] as num?)?.toDouble() ?? 0.0,
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
 

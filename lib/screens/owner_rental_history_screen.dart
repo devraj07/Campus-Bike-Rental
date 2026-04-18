@@ -1,8 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../models/bike.dart';
 import '../models/bike_rental_record.dart';
+import '../models/ride.dart';
 import '../services/api_service.dart';
 import '../services/user_session.dart';
+
+class _OwnerData {
+  final List<Ride> rides;
+  final Bike? bike;
+  final double withdrawnEarnings;
+  const _OwnerData({
+    required this.rides,
+    required this.bike,
+    required this.withdrawnEarnings,
+  });
+}
 
 class OwnerRentalHistoryScreen extends StatefulWidget {
   const OwnerRentalHistoryScreen({super.key});
@@ -13,13 +26,29 @@ class OwnerRentalHistoryScreen extends StatefulWidget {
 }
 
 class _OwnerRentalHistoryScreenState extends State<OwnerRentalHistoryScreen> {
-  late Future<List<BikeRentalRecord>> _historyFuture;
+  late Future<_OwnerData> _dataFuture;
   bool _withdrawing = false;
 
   @override
   void initState() {
     super.initState();
-    _historyFuture = ApiService().fetchRentalHistory(UserSession.userId);
+    _dataFuture = _loadData();
+  }
+
+  Future<_OwnerData> _loadData() async {
+    final api = ApiService();
+    final bike = await api.fetchOwnerBike(UserSession.userId);
+    final results = await Future.wait([
+      bike != null
+          ? api.fetchBikeRides(bike.id)
+          : Future.value(<Ride>[]),
+      api.fetchWithdrawnEarnings(UserSession.userId),
+    ]);
+    return _OwnerData(
+      rides: results[0] as List<Ride>,
+      bike: bike,
+      withdrawnEarnings: results[1] as double,
+    );
   }
 
   String _formatDuration(Duration d) {
@@ -28,42 +57,61 @@ class _OwnerRentalHistoryScreenState extends State<OwnerRentalHistoryScreen> {
   }
 
   Future<void> _withdraw(double pendingAmount) async {
+    if (pendingAmount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No earnings available to withdraw.')),
+      );
+      return;
+    }
     setState(() => _withdrawing = true);
-    await Future.delayed(const Duration(seconds: 2));
-    if (!mounted) return;
-    setState(() => _withdrawing = false);
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.check_circle_rounded,
-                color: Color(0xFF2E7D32), size: 60),
-            const SizedBox(height: 16),
-            const Text('Withdrawal Successful!',
-                style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF1B5E20))),
-            const SizedBox(height: 8),
-            Text(
-              '₹${pendingAmount.toStringAsFixed(0)} will be credited to your UPI in 24 hours.',
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.grey, fontSize: 13),
+    try {
+      await ApiService().withdrawEarnings(UserSession.userId, pendingAmount);
+      if (!mounted) return;
+      // Reload data so the UI reflects the new withdrawn amount
+      setState(() {
+        _dataFuture = _loadData();
+        _withdrawing = false;
+      });
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.check_circle_rounded,
+                  color: Color(0xFF2E7D32), size: 60),
+              const SizedBox(height: 16),
+              const Text('Withdrawal Requested!',
+                  style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF1B5E20))),
+              const SizedBox(height: 8),
+              Text(
+                '₹${pendingAmount.toStringAsFixed(0)} will be credited to your UPI in 24 hours.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.grey, fontSize: 13),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Done',
+                  style: TextStyle(color: Color(0xFF2E7D32))),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child:
-                const Text('Done', style: TextStyle(color: Color(0xFF2E7D32))),
-          ),
-        ],
-      ),
-    );
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _withdrawing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Withdrawal failed: $e')),
+      );
+    }
   }
 
   @override
@@ -75,8 +123,8 @@ class _OwnerRentalHistoryScreenState extends State<OwnerRentalHistoryScreen> {
         title: const Text('My Bike Earnings'),
         backgroundColor: const Color(0xFF2E7D32),
       ),
-      body: FutureBuilder<List<BikeRentalRecord>>(
-        future: _historyFuture,
+      body: FutureBuilder<_OwnerData>(
+        future: _dataFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(
@@ -89,8 +137,22 @@ class _OwnerRentalHistoryScreenState extends State<OwnerRentalHistoryScreen> {
             );
           }
 
-          final records = snapshot.data!;
-          final earnings = OwnerEarnings.fromRecords(records);
+          final rides = snapshot.data!.rides;
+          final bike = snapshot.data!.bike;
+          final completedRides = rides.where((r) => r.status == 'completed').toList();
+          final totalEarned = completedRides.fold(0.0, (s, r) => s + r.cost * 0.7);
+          final withdrawn = snapshot.data!.withdrawnEarnings;
+          final pending = (totalEarned - withdrawn).clamp(0.0, double.infinity);
+          final earnings = OwnerEarnings(
+            totalRentals: completedRides.length,
+            totalEarnings: totalEarned,
+            withdrawn: withdrawn,
+            pendingWithdrawal: pending,
+          );
+
+          final bikeLabel = bike != null
+              ? 'Bike ${bike.id} • ${bike.station}'
+              : 'No bike listed yet';
 
           return CustomScrollView(
             slivers: [
@@ -111,7 +173,7 @@ class _OwnerRentalHistoryScreenState extends State<OwnerRentalHistoryScreen> {
                           borderRadius: BorderRadius.circular(24),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF2E7D32).withOpacity(0.3),
+                              color: const Color(0xFF2E7D32).withValues(alpha: 0.3),
                               blurRadius: 16,
                               offset: const Offset(0, 6),
                             ),
@@ -119,14 +181,14 @@ class _OwnerRentalHistoryScreenState extends State<OwnerRentalHistoryScreen> {
                         ),
                         child: Column(
                           children: [
-                            const Row(
+                            Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.electric_bike_rounded,
+                                const Icon(Icons.electric_bike_rounded,
                                     color: Colors.white70, size: 18),
-                                SizedBox(width: 8),
-                                Text('Bike B201 • Academic Block A',
-                                    style: TextStyle(
+                                const SizedBox(width: 8),
+                                Text(bikeLabel,
+                                    style: const TextStyle(
                                         color: Colors.white70, fontSize: 13)),
                               ],
                             ),
@@ -159,7 +221,7 @@ class _OwnerRentalHistoryScreenState extends State<OwnerRentalHistoryScreen> {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 16, vertical: 10),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.15),
+                                color: Colors.white.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Row(
@@ -186,7 +248,9 @@ class _OwnerRentalHistoryScreenState extends State<OwnerRentalHistoryScreen> {
                         children: [
                           Expanded(
                             child: OutlinedButton.icon(
-                              onPressed: () => _showBikeStatusSheet(context),
+                              onPressed: bike != null
+                                  ? () => _showBikeStatusSheet(context, bike)
+                                  : null,
                               icon: const Icon(Icons.info_outline_rounded,
                                   size: 18),
                               label: const Text('View Bike Status'),
@@ -247,7 +311,7 @@ class _OwnerRentalHistoryScreenState extends State<OwnerRentalHistoryScreen> {
                               fontWeight: FontWeight.w700,
                               color: const Color(0xFF1B5E20))),
                       const Spacer(),
-                      Text('${records.length} records',
+                      Text('${rides.length} rides',
                           style: const TextStyle(
                               color: Colors.grey, fontSize: 13)),
                     ],
@@ -256,9 +320,9 @@ class _OwnerRentalHistoryScreenState extends State<OwnerRentalHistoryScreen> {
               ),
               SliverList(
                 delegate: SliverChildBuilderDelegate(
-                  (ctx, i) => _RentalRecordCard(
-                      record: records[i], formatDuration: _formatDuration),
-                  childCount: records.length,
+                  (ctx, i) => _BikeRideCard(
+                      ride: rides[i], formatDuration: _formatDuration),
+                  childCount: rides.length,
                 ),
               ),
               const SliverToBoxAdapter(child: SizedBox(height: 24)),
@@ -269,13 +333,19 @@ class _OwnerRentalHistoryScreenState extends State<OwnerRentalHistoryScreen> {
     );
   }
 
-  void _showBikeStatusSheet(BuildContext context) {
+  void _showBikeStatusSheet(BuildContext context, Bike bike) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (_) => Padding(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.only(
+          left: 24,
+          right: 24,
+          top: 24,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -289,29 +359,136 @@ class _OwnerRentalHistoryScreenState extends State<OwnerRentalHistoryScreen> {
             _StatusRow(
                 icon: Icons.electric_bike_rounded,
                 label: 'Bike ID',
-                value: 'B201',
+                value: bike.id,
                 color: const Color(0xFF2E7D32)),
             const Divider(height: 24),
             _StatusRow(
                 icon: Icons.location_on_rounded,
                 label: 'Current Stand',
-                value: 'Academic Block A',
+                value: bike.station,
                 color: const Color(0xFF1565C0)),
             const Divider(height: 24),
             _StatusRow(
                 icon: Icons.circle_rounded,
                 label: 'Status',
-                value: 'Available',
-                color: const Color(0xFF2E7D32)),
+                value: bike.isAvailable ? 'Available' : 'On Ride',
+                color: bike.isAvailable
+                    ? const Color(0xFF2E7D32)
+                    : const Color(0xFF1565C0)),
             const Divider(height: 24),
-            _StatusRow(
-                icon: Icons.battery_charging_full_rounded,
-                label: 'Battery',
-                value: '78%',
-                color: const Color(0xFF2E7D32)),
+            // Hourly rate row with edit button
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                      color: const Color(0xFF6A1B9A).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8)),
+                  child: const Icon(Icons.currency_rupee_rounded,
+                      color: Color(0xFF6A1B9A), size: 18),
+                ),
+                const SizedBox(width: 14),
+                const Text('Hourly Rate',
+                    style: TextStyle(color: Colors.grey, fontSize: 13)),
+                const Spacer(),
+                Text('₹${bike.pricePerHour.toInt()}/hr',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF6A1B9A),
+                        fontSize: 14)),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showEditRateDialog(bike);
+                  },
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF6A1B9A).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text('Edit',
+                        style: TextStyle(
+                            color: Color(0xFF6A1B9A),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 20),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showEditRateDialog(Bike bike) {
+    final controller =
+        TextEditingController(text: bike.pricePerHour.toInt().toString());
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Set Hourly Rate',
+            style: TextStyle(
+                fontWeight: FontWeight.w700, color: Color(0xFF1B5E20))),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          autofocus: true,
+          decoration: InputDecoration(
+            prefixText: '₹ ',
+            suffixText: '/hr',
+            hintText: '10',
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel',
+                style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2E7D32),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10))),
+            onPressed: () async {
+              final value = double.tryParse(controller.text.trim());
+              if (value == null || value < 1 || value > 200) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                      content: Text('Enter a valid rate between ₹1–₹200.')),
+                );
+                return;
+              }
+              Navigator.pop(ctx);
+              try {
+                await ApiService().updatePricePerHour(bike.id, value);
+                if (!mounted) return;
+                setState(() { _dataFuture = _loadData(); });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                        'Rate updated to ₹${value.toInt()}/hr.'),
+                    backgroundColor: const Color(0xFF2E7D32),
+                  ),
+                );
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Failed to update rate: $e')),
+                );
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
       ),
     );
   }
@@ -342,85 +519,134 @@ class _EarningsStat extends StatelessWidget {
   }
 }
 
-class _RentalRecordCard extends StatelessWidget {
-  final BikeRentalRecord record;
+class _BikeRideCard extends StatelessWidget {
+  final Ride ride;
   final String Function(Duration) formatDuration;
-  const _RentalRecordCard({required this.record, required this.formatDuration});
+  const _BikeRideCard({required this.ride, required this.formatDuration});
 
   @override
   Widget build(BuildContext context) {
-    final dateStr = DateFormat('dd MMM').format(record.date);
-    final timeStr = DateFormat('hh:mm a').format(record.date);
+    final isActive = ride.status == 'active';
+    final isPaid = ride.paymentStatus == 'paid';
+    final dateStr = DateFormat('dd MMM yyyy').format(ride.startTime);
+    final timeStr = DateFormat('hh:mm a').format(ride.startTime);
+    final earnings = ride.cost * 0.7;
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: const BoxDecoration(
-                  color: Color(0xFFE8F5E9), shape: BoxShape.circle),
-              child: const Icon(Icons.person_rounded,
-                  color: Color(0xFF2E7D32), size: 24),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: const BoxDecoration(
+                      color: Color(0xFFE8F5E9), shape: BoxShape.circle),
+                  child: const Icon(Icons.person_rounded,
+                      color: Color(0xFF2E7D32), size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Bike ${record.bikeId}',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF1B5E20),
-                              fontSize: 15)),
-                      const Spacer(),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                            color: const Color(0xFFE8F5E9),
-                            borderRadius: BorderRadius.circular(20)),
-                        child: Text('₹${record.earnings.toStringAsFixed(0)}',
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w800,
-                                color: Color(0xFF2E7D32),
-                                fontSize: 15)),
+                      Text(
+                        ride.renterName.isNotEmpty ? ride.renterName : 'Unknown Renter',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1B5E20),
+                            fontSize: 15),
                       ),
+                      Text('$dateStr • $timeStr',
+                          style: const TextStyle(color: Colors.grey, fontSize: 12)),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  Text('Rented by: ${record.rentedBy}',
-                      style: const TextStyle(
-                          color: Color(0xFF424242),
-                          fontWeight: FontWeight.w500,
-                          fontSize: 13)),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      const Icon(Icons.timer_outlined,
-                          size: 13, color: Colors.grey),
-                      const SizedBox(width: 4),
-                      Text('Duration: ${formatDuration(record.duration)}',
-                          style: const TextStyle(
-                              color: Colors.grey, fontSize: 12)),
-                      const SizedBox(width: 14),
-                      const Icon(Icons.calendar_today_rounded,
-                          size: 13, color: Colors.grey),
-                      const SizedBox(width: 4),
-                      Text('$dateStr • $timeStr',
-                          style: const TextStyle(
-                              color: Colors.grey, fontSize: 12)),
-                    ],
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      isActive ? 'Active' : '₹${earnings.toStringAsFixed(0)}',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          color: isActive
+                              ? const Color(0xFF1565C0)
+                              : const Color(0xFF2E7D32),
+                          fontSize: 16),
+                    ),
+                    if (!isActive)
+                      Text('your cut (70%)',
+                          style: const TextStyle(color: Colors.grey, fontSize: 10)),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                _Tag(
+                  label: isActive ? 'Active' : 'Completed',
+                  color: isActive ? const Color(0xFF1565C0) : const Color(0xFF2E7D32),
+                ),
+                const SizedBox(width: 8),
+                if (!isActive)
+                  _Tag(
+                    label: isPaid ? 'Paid' : 'Unpaid',
+                    color: isPaid ? const Color(0xFF2E7D32) : const Color(0xFFD32F2F),
+                  ),
+                const Spacer(),
+                if (!isActive) ...[
+                  const Icon(Icons.timer_outlined, size: 13, color: Colors.grey),
+                  const SizedBox(width: 4),
+                  Text(formatDuration(ride.duration),
+                      style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                ],
+              ],
+            ),
+            if (ride.fromStation.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Icon(Icons.route_rounded, size: 13, color: Colors.grey),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      ride.toStation.isNotEmpty
+                          ? '${ride.fromStation} → ${ride.toStation}'
+                          : ride.fromStation,
+                      style: const TextStyle(color: Colors.grey, fontSize: 12),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ],
               ),
-            ),
+            ],
           ],
         ),
       ),
+    );
+  }
+}
+
+class _Tag extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _Tag({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(label,
+          style: TextStyle(
+              color: color, fontSize: 11, fontWeight: FontWeight.w600)),
     );
   }
 }
@@ -443,7 +669,7 @@ class _StatusRow extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8)),
           child: Icon(icon, color: color, size: 18),
         ),

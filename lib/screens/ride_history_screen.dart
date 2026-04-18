@@ -45,8 +45,6 @@ class _RideHistoryScreenState extends State<RideHistoryScreen> {
 
           final rides = snapshot.data!;
           final totalSpent = rides.fold(0.0, (sum, r) => sum + r.cost);
-          final totalCo2 =
-              rides.fold(0.0, (s, r) => s + r.distanceKm) * 0.21;
 
           return Column(
             children: [
@@ -77,13 +75,6 @@ class _RideHistoryScreenState extends State<RideHistoryScreen> {
                       icon: Icons.currency_rupee_rounded,
                       label: 'Total Spent',
                       value: '₹${totalSpent.toStringAsFixed(0)}',
-                    ),
-                    Container(
-                        width: 1, height: 40, color: Colors.white30),
-                    _SummaryCell(
-                      icon: Icons.eco_rounded,
-                      label: 'CO₂ Saved',
-                      value: '${totalCo2.toStringAsFixed(0)}g',
                     ),
                   ],
                 ),
@@ -202,7 +193,7 @@ class _RideCard extends StatelessWidget {
                           size: 12, color: Colors.grey),
                       const SizedBox(width: 4),
                       Text(
-                        '${ride.duration.inMinutes} min  •  ${ride.distanceKm} km',
+                        '${ride.duration.inMinutes} min',
                         style:
                             const TextStyle(color: Colors.grey, fontSize: 11),
                       ),

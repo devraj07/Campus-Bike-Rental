@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../services/user_session.dart';
 import '../models/bike_state.dart';
 import 'owner_pin_setup_screen.dart';
 
@@ -15,33 +16,85 @@ class _ListYourBikeScreenState extends State<ListYourBikeScreen>
   late TabController _tabController;
   final _formKey = GlobalKey<FormState>();
   final _bikeIdController = TextEditingController();
+  final _priceController = TextEditingController(text: '10');
   String? _selectedStation;
   String? _selectedImageName;
   bool _submitting = false;
   bool _isListedForRent = false;
   bool _ownerPinSet = false;
+  String _listedBikeId = '';
+  double _pricePerHour = 10.0;
   final _api = ApiService();
   BikeStatus _bikeStatus = BikeStatus.docked;
 
-  static const List<String> _stations = [
-    'Academic Block A',
-    'Hostel 1 Stand',
-    'Library Gate',
-    'Sports Complex',
-    'Mess Block',
-    'Admin Building',
-  ];
+  List<String> _stations = [];
+  bool _loadingStations = true;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _loadStations();
+    _loadExistingBike();
+  }
+
+  Future<void> _loadExistingBike() async {
+    try {
+      final data = await _api.fetchOwnerBikeData(UserSession.userId);
+      if (data == null || !mounted) return;
+      final bikeId = data['id'] as String;
+      final isListed = data['isListedForRent'] as bool? ?? false;
+      final hasPin = (data['ownerPin'] as String?)?.isNotEmpty ?? false;
+      final isAvailable = data['isAvailable'] as bool? ?? false;
+
+      BikeStatus status;
+      if (!isAvailable) {
+        status = BikeStatus.onRide;
+      } else if (isListed) {
+        status = BikeStatus.docked;
+      } else {
+        status = BikeStatus.unplugged;
+      }
+
+      final price = (data['pricePerHour'] as num?)?.toDouble() ?? 10.0;
+      setState(() {
+        _listedBikeId = bikeId;
+        _bikeIdController.text = bikeId;
+        _selectedStation = data['station'] as String?;
+        _isListedForRent = isListed;
+        _ownerPinSet = hasPin;
+        _bikeStatus = status;
+        _pricePerHour = price;
+        _priceController.text = price.toInt().toString();
+      });
+    } catch (_) {
+      // No existing bike — form stays blank
+    }
+  }
+
+  Future<void> _loadStations() async {
+    try {
+      final stands = await _api.fetchStands();
+      if (mounted) {
+        setState(() {
+          _stations = stands.map((s) => s.standName).toList();
+          _loadingStations = false;
+          // If the saved station isn't in the list, clear it to avoid dropdown assert
+          if (_selectedStation != null && !_stations.contains(_selectedStation)) {
+            _selectedStation = null;
+          }
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingStations = false);
+    }
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     _bikeIdController.dispose();
+    _priceController.dispose();
     super.dispose();
   }
 
@@ -53,12 +106,21 @@ class _ListYourBikeScreenState extends State<ListYourBikeScreen>
     if (!_formKey.currentState!.validate()) return;
     setState(() => _submitting = true);
     try {
+      final bikeId = _bikeIdController.text.trim();
+      final price = double.tryParse(_priceController.text.trim()) ?? 10.0;
       await _api.submitBikeListing(
-        bikeId: _bikeIdController.text.trim(),
+        bikeId: bikeId,
         station: _selectedStation!,
+        pricePerHour: price,
         imagePath: _selectedImageName,
       );
+      setState(() => _pricePerHour = price);
       if (!mounted) return;
+      setState(() {
+        _listedBikeId = bikeId;
+        _isListedForRent = true;
+        _bikeStatus = BikeStatus.docked;
+      });
       _tabController.animateTo(1);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -72,21 +134,30 @@ class _ListYourBikeScreenState extends State<ListYourBikeScreen>
   }
 
   Future<void> _toggleRentListing(bool value) async {
+    if (_listedBikeId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Submit your bike first before toggling the listing.'),
+          backgroundColor: Color(0xFFD32F2F),
+        ),
+      );
+      return;
+    }
+
     if (value && !_ownerPinSet) {
       final result = await Navigator.push<bool>(
         context,
         MaterialPageRoute(
-          builder: (_) => OwnerPinSetupScreen(
-            bikeId: _bikeIdController.text.isNotEmpty
-                ? _bikeIdController.text
-                : 'YOUR-BIKE',
-          ),
+          builder: (_) => OwnerPinSetupScreen(bikeId: _listedBikeId),
         ),
       );
       if (result == true) {
+        await _api.updateListingStatus(_listedBikeId, isListed: true);
+        if (!mounted) return;
         setState(() {
           _ownerPinSet = true;
           _isListedForRent = true;
+          _bikeStatus = BikeStatus.docked;
         });
       }
     } else {
@@ -111,8 +182,81 @@ class _ListYourBikeScreenState extends State<ListYourBikeScreen>
         );
         return;
       }
+      await _api.updateListingStatus(_listedBikeId, isListed: value);
+      if (!mounted) return;
       setState(() => _isListedForRent = value);
     }
+  }
+
+  void _showEditRateDialog() {
+    final controller =
+        TextEditingController(text: _pricePerHour.toInt().toString());
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Set Hourly Rate',
+            style: TextStyle(
+                fontWeight: FontWeight.w700, color: Color(0xFF1B5E20))),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          autofocus: true,
+          decoration: InputDecoration(
+            prefixText: '₹ ',
+            suffixText: '/hr',
+            hintText: '10',
+            border:
+                OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child:
+                const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2E7D32),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10))),
+            onPressed: () async {
+              final value = double.tryParse(controller.text.trim());
+              if (value == null || value < 1 || value > 200) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                      content:
+                          Text('Enter a valid rate between ₹1–₹200.')),
+                );
+                return;
+              }
+              Navigator.pop(ctx);
+              try {
+                await _api.updatePricePerHour(_listedBikeId, value);
+                if (!mounted) return;
+                setState(() {
+                  _pricePerHour = value;
+                  _priceController.text = value.toInt().toString();
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Rate updated to ₹${value.toInt()}/hr.'),
+                    backgroundColor: const Color(0xFF2E7D32),
+                  ),
+                );
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Failed to update rate: $e')),
+                );
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
   }
 
   Color _statusColor(BikeStatus s) {
@@ -197,15 +341,37 @@ class _ListYourBikeScreenState extends State<ListYourBikeScreen>
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
-                    value: _selectedStation,
-                    decoration: const InputDecoration(
+                    key: ValueKey('${_loadingStations}_$_selectedStation'),
+                    initialValue: _loadingStations ? null : _selectedStation,
+                    decoration: InputDecoration(
                         labelText: 'Parking Stand Location',
-                        prefixIcon: Icon(Icons.location_on_rounded)),
+                        prefixIcon: const Icon(Icons.location_on_rounded),
+                        hintText: _loadingStations ? 'Loading stands…' : null),
                     items: _stations
                         .map((s) => DropdownMenuItem(value: s, child: Text(s)))
                         .toList(),
-                    onChanged: (v) => setState(() => _selectedStation = v),
+                    onChanged: _loadingStations
+                        ? null
+                        : (v) => setState(() => _selectedStation = v),
                     validator: (v) => v == null ? 'Please select a location' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _priceController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Hourly Rate (₹)',
+                      hintText: 'e.g. 10',
+                      prefixIcon: Icon(Icons.currency_rupee_rounded),
+                      suffixText: '/hr',
+                    ),
+                    validator: (v) {
+                      final val = double.tryParse(v?.trim() ?? '');
+                      if (val == null || val < 1 || val > 200) {
+                        return 'Enter a rate between ₹1 and ₹200';
+                      }
+                      return null;
+                    },
                   ),
                   const SizedBox(height: 20),
                   GestureDetector(
@@ -299,7 +465,7 @@ class _ListYourBikeScreenState extends State<ListYourBikeScreen>
                             Text(
                               _bikeIdController.text.isNotEmpty
                                   ? _bikeIdController.text
-                                  : 'B201',
+                                  : 'Your Bike',
                               style: const TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.w700,
@@ -310,7 +476,7 @@ class _ListYourBikeScreenState extends State<ListYourBikeScreen>
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 10, vertical: 5),
                               decoration: BoxDecoration(
-                                color: _statusColor(_bikeStatus).withOpacity(0.1),
+                                color: _statusColor(_bikeStatus).withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Row(
@@ -340,10 +506,55 @@ class _ListYourBikeScreenState extends State<ListYourBikeScreen>
                           const Icon(Icons.location_on_rounded,
                               size: 14, color: Colors.grey),
                           const SizedBox(width: 4),
-                          Text(_selectedStation ?? 'Academic Block A',
+                          Text(_selectedStation ?? 'Not selected',
                               style: const TextStyle(
                                   color: Colors.grey, fontSize: 13)),
                         ]),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Hourly rate card
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF6A1B9A).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.currency_rupee_rounded,
+                              color: Color(0xFF6A1B9A), size: 22),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Hourly Rate',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 16,
+                                      color: Color(0xFF1B5E20))),
+                              Text('₹${_pricePerHour.toInt()} per hour',
+                                  style: const TextStyle(
+                                      color: Colors.grey, fontSize: 12)),
+                            ],
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: _listedBikeId.isEmpty
+                              ? null
+                              : () => _showEditRateDialog(),
+                          child: const Text('Edit',
+                              style: TextStyle(
+                                  color: Color(0xFF6A1B9A),
+                                  fontWeight: FontWeight.w700)),
+                        ),
                       ],
                     ),
                   ),
@@ -394,7 +605,7 @@ class _ListYourBikeScreenState extends State<ListYourBikeScreen>
                             Switch(
                               value: _isListedForRent,
                               onChanged: _toggleRentListing,
-                              activeColor: const Color(0xFF2E7D32),
+                              activeThumbColor: const Color(0xFF2E7D32),
                             ),
                           ],
                         ),
@@ -492,7 +703,7 @@ class _ListYourBikeScreenState extends State<ListYourBikeScreen>
                                     builder: (_) => OwnerPinSetupScreen(
                                       bikeId: _bikeIdController.text.isNotEmpty
                                           ? _bikeIdController.text
-                                          : 'B201',
+                                          : 'YOUR-BIKE',
                                       isChangingPin: _ownerPinSet,
                                     ),
                                   ),
@@ -551,11 +762,11 @@ class _ListYourBikeScreenState extends State<ListYourBikeScreen>
                                 fontSize: 15,
                                 color: Color(0xFF1B5E20))),
                         const SizedBox(height: 14),
-                        _StateRow(color: const Color(0xFF2E7D32), label: 'Docked', desc: 'At stand, ready to rent'),
-                        _StateRow(color: const Color(0xFFF9A825), label: 'Reserved', desc: 'Renter booked, OTP sent to lock'),
-                        _StateRow(color: const Color(0xFF1565C0), label: 'On Ride', desc: 'OTP entered, billing running'),
-                        _StateRow(color: const Color(0xFF9E9E9E), label: 'Unplugged', desc: 'Wire pulled, not yet unlocked'),
-                        _StateRow(color: const Color(0xFF6A1B9A), label: 'Owner Use', desc: 'You unlocked with owner PIN'),
+                        const _StateRow(color: Color(0xFF2E7D32), label: 'Docked', desc: 'At stand, ready to rent'),
+                        const _StateRow(color: Color(0xFFF9A825), label: 'Reserved', desc: 'Renter booked, OTP sent to lock'),
+                        const _StateRow(color: Color(0xFF1565C0), label: 'On Ride', desc: 'OTP entered, billing running'),
+                        const _StateRow(color: Color(0xFF9E9E9E), label: 'Unplugged', desc: 'Wire pulled, not yet unlocked'),
+                        const _StateRow(color: Color(0xFF6A1B9A), label: 'Owner Use', desc: 'You unlocked with owner PIN'),
                       ],
                     ),
                   ),
