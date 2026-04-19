@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
 import '../services/user_session.dart';
 import '../models/bike_state.dart';
@@ -18,7 +20,7 @@ class _ListYourBikeScreenState extends State<ListYourBikeScreen>
   final _bikeIdController = TextEditingController();
   final _priceController = TextEditingController(text: '10');
   String? _selectedStation;
-  String? _selectedImageName;
+  File? _selectedImageFile;
   bool _submitting = false;
   bool _isListedForRent = false;
   bool _ownerPinSet = false;
@@ -99,7 +101,13 @@ class _ListYourBikeScreenState extends State<ListYourBikeScreen>
   }
 
   Future<void> _pickImage() async {
-    setState(() => _selectedImageName = 'my_bike_photo.jpg');
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+    );
+    if (picked != null) {
+      setState(() => _selectedImageFile = File(picked.path));
+    }
   }
 
   Future<void> _submit() async {
@@ -112,7 +120,7 @@ class _ListYourBikeScreenState extends State<ListYourBikeScreen>
         bikeId: bikeId,
         station: _selectedStation!,
         pricePerHour: price,
-        imagePath: _selectedImageName,
+        imagePath: _selectedImageFile?.path,
       );
       setState(() => _pricePerHour = price);
       if (!mounted) return;
@@ -378,41 +386,53 @@ class _ListYourBikeScreenState extends State<ListYourBikeScreen>
                     onTap: _pickImage,
                     child: Container(
                       width: double.infinity,
-                      height: 130,
+                      height: 160,
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color: _selectedImageName != null
+                          color: _selectedImageFile != null
                               ? const Color(0xFF2E7D32)
                               : const Color(0xFFE0E0E0),
-                          width: _selectedImageName != null ? 2 : 1,
+                          width: _selectedImageFile != null ? 2 : 1,
                         ),
                       ),
-                      child: _selectedImageName == null
+                      child: _selectedImageFile == null
                           ? const Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(Icons.add_photo_alternate_rounded,
                                     color: Color(0xFFBDBDBD), size: 40),
                                 SizedBox(height: 8),
-                                Text('Tap to upload bike photo',
+                                Text('Tap to pick bike photo from gallery',
                                     style: TextStyle(color: Color(0xFFBDBDBD))),
                               ],
                             )
-                          : Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
+                          : Stack(
+                              fit: StackFit.expand,
                               children: [
-                                const Icon(Icons.check_circle_rounded,
-                                    color: Color(0xFF2E7D32), size: 36),
-                                const SizedBox(height: 8),
-                                Text(_selectedImageName!,
-                                    style: const TextStyle(
-                                        color: Color(0xFF2E7D32),
-                                        fontWeight: FontWeight.w600)),
-                                const Text('Tap to change',
-                                    style: TextStyle(
-                                        color: Colors.grey, fontSize: 12)),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(14),
+                                  child: Image.file(
+                                    _selectedImageFile!,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                                Positioned(
+                                  bottom: 8,
+                                  right: 8,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black54,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Text('Tap to change',
+                                        style: TextStyle(
+                                            color: Colors.white, fontSize: 11)),
+                                  ),
+                                ),
                               ],
                             ),
                     ),

@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import '../models/bike.dart';
 import '../models/ride.dart';
 import '../models/bike_state.dart';
@@ -7,6 +9,7 @@ import 'user_session.dart';
 
 class ApiService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseStorage _storage = FirebaseStorage.instance;
 
   // ─── Bikes ───────────────────────────────────────────────────────────────
 
@@ -418,12 +421,22 @@ class ApiService {
 
   // ─── Bike Listing ─────────────────────────────────────────────────────────
 
+  Future<String> uploadBikeImage(String bikeId, String localPath) async {
+    final ref = _storage.ref().child('bikes/$bikeId.jpg');
+    await ref.putFile(File(localPath));
+    return await ref.getDownloadURL();
+  }
+
   Future<bool> submitBikeListing({
     required String bikeId,
     required String station,
     required double pricePerHour,
     String? imagePath,
   }) async {
+    String imageUrl = '';
+    if (imagePath != null && imagePath.isNotEmpty) {
+      imageUrl = await uploadBikeImage(bikeId, imagePath);
+    }
     await _db.collection('bikes').doc(bikeId).set({
       'station': station,
       'isAvailable': true,
@@ -432,7 +445,7 @@ class ApiService {
       'pricePerHour': pricePerHour,
       'type': 'Standard',
       'distanceKm': 0.0,
-      'imageUrl': imagePath ?? '',
+      'imageUrl': imageUrl,
       'ownerId': UserSession.userId,
       'listedAt': Timestamp.now(),
     });
