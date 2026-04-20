@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../models/bike.dart';
 import '../models/bike_state.dart';
 import '../services/api_service.dart';
+import '../services/mqtt_service.dart';
 import '../services/user_session.dart';
 import 'payment_screen.dart';
 
@@ -25,6 +26,7 @@ class ActiveRideScreen extends StatefulWidget {
 
 class _ActiveRideScreenState extends State<ActiveRideScreen> {
   final _api = ApiService();
+  final _mqtt = MqttService();
   bool _ending = false;
   bool _waitingForHardware = false;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _endSub;
@@ -32,9 +34,25 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
   String? _pendingToStation;
 
   @override
+  void initState() {
+    super.initState();
+    _startMqttListener();
+  }
+
+  Future<void> _startMqttListener() async {
+    try {
+      await _mqtt.connect();
+      _mqtt.listenForRideEnd('1', widget.rideId);
+    } catch (_) {
+      // MQTT unavailable — Firestore fallback still works
+    }
+  }
+
+  @override
   void dispose() {
     _endSub?.cancel();
     _hardwareTimeout?.cancel();
+    _mqtt.disconnect();
     super.dispose();
   }
 

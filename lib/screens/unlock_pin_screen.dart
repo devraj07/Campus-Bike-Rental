@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../models/bike.dart';
 import '../services/api_service.dart';
+import '../services/mqtt_service.dart';
 import '../services/user_session.dart';
 import '../utils/code_generator.dart';
 import 'active_ride_screen.dart';
@@ -36,6 +37,7 @@ class _UnlockPinScreenState extends State<UnlockPinScreen>
   late Animation<double> _pulseAnim;    // mapped to 0.95–1.05 scale
 
   final _api = ApiService();
+  final _mqtt = MqttService();
 
   @override
   void initState() {
@@ -73,6 +75,13 @@ class _UnlockPinScreenState extends State<UnlockPinScreen>
     setState(() => _pushingOtp = true);
     try {
       await _api.pushOtpToLock(widget.bike.id, _currentPin);
+      // Also publish OTP to MQTT so ESP32 keypad receives it
+      try {
+        await _mqtt.connect();
+        _mqtt.publishOtp('1', _currentPin);
+      } catch (_) {
+        // MQTT failure is non-fatal — manual unlock still works
+      }
     } catch (e) {
       // If push fails, the manual button is still available as fallback
       if (mounted) {
