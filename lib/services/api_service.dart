@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -423,8 +424,18 @@ class ApiService {
 
   Future<String> uploadBikeImage(String bikeId, String localPath) async {
     final ref = _storage.ref().child('bikes/$bikeId.jpg');
-    await ref.putFile(File(localPath));
-    return await ref.getDownloadURL();
+    await ref.putFile(File(localPath)).timeout(
+      const Duration(seconds: 30),
+      onTimeout: () => throw TimeoutException(
+        'Image upload timed out.',
+      ),
+    );
+    return await ref.getDownloadURL().timeout(
+      const Duration(seconds: 20),
+      onTimeout: () => throw TimeoutException(
+        'Fetching image URL timed out.',
+      ),
+    );
   }
 
   Future<bool> submitBikeListing({
@@ -433,23 +444,44 @@ class ApiService {
     required double pricePerHour,
     String? imagePath,
   }) async {
-    String imageUrl = '';
-    if (imagePath != null && imagePath.isNotEmpty) {
-      imageUrl = await uploadBikeImage(bikeId, imagePath);
+    try {
+      String imageUrl = '';
+      if (imagePath != null && imagePath.isNotEmpty) {
+        try {
+          imageUrl = await uploadBikeImage(bikeId, imagePath);
+        } on FirebaseException catch (e) {
+          // Continue listing without image if storage object lookup fails.
+          if (e.code != 'object-not-found') rethrow;
+        }
+      }
+      await _db.collection('bikes').doc(bikeId).set({
+        'station': station,
+        'isAvailable': true,
+        'isListedForRent': true,
+        'batteryLevel': 100,
+        'pricePerHour': pricePerHour,
+        'type': 'Standard',
+        'distanceKm': 0.0,
+        'imageUrl': imageUrl,
+        'ownerId': UserSession.userId,
+        'listedAt': Timestamp.now(),
+      }).timeout(
+        const Duration(seconds: 20),
+        onTimeout: () => throw TimeoutException(
+          'Saving bike listing timed out.',
+        ),
+      );
+      return true;
+    } on FirebaseException catch (e) {
+      if (e.plugin == 'firebase_storage') {
+        throw Exception('Storage error (${e.code}): ${e.message}');
+      }
+      throw Exception('Database error (${e.code}): ${e.message}');
+    } on TimeoutException catch (e) {
+      throw Exception(e.message ?? 'Operation timed out.');
+    } on SocketException catch (e) {
+      throw Exception('Network error: ${e.message}');
     }
-    await _db.collection('bikes').doc(bikeId).set({
-      'station': station,
-      'isAvailable': true,
-      'isListedForRent': true,
-      'batteryLevel': 100,
-      'pricePerHour': pricePerHour,
-      'type': 'Standard',
-      'distanceKm': 0.0,
-      'imageUrl': imageUrl,
-      'ownerId': UserSession.userId,
-      'listedAt': Timestamp.now(),
-    });
-    return true;
   }
 
   // ─── Owner PIN ────────────────────────────────────────────────────────────
@@ -506,6 +538,63 @@ class ApiService {
 
   /// Checks the user's Firestore doc for a stored activeRideId.
   /// Returns the ride + bike if one is still active, null otherwise.
+  Future<void> ingestHardwarePayload({
+    required String bikeId,
+    required String topic,
+    required Map<String, dynamic> payload,
+  }) async {
+    final now = Timestamp.now();
+
+    final dynamic lockStatus = payload['lockStatus'];
+    final dynamic batteryLevel = payload['batteryLevel'];
+    final dynamic rideDurationSeconds = payload['rideDurationSeconds'];
+    final dynamic rideId = payload['rideId'];
+    final dynamic standName = payload['standName'];
+    final dynamic currentOtp = payload['currentOtp'];
+
+    final bikeUpdate = <String, dynamic>{
+      'hardware.lastSeenAt': now,
+      'hardware.lastTopic': topic,
+      'hardware.lastPayload': payload,
+    };
+
+    if (lockStatus is String && lockStatus.isNotEmpty) {
+      bikeUpdate['lockStatus'] = lockStatus;
+    }
+    if (batteryLevel is num) {
+      bikeUpdate['batteryLevel'] = batteryLevel.toInt();
+      bikeUpdate['hardware.batteryLevel'] = batteryLevel.toInt();
+    }
+    if (standName is String && standName.isNotEmpty) {
+      bikeUpdate['station'] = standName;
+    }
+    if (currentOtp is String && currentOtp.isNotEmpty) {
+      bikeUpdate['currentOtp'] = currentOtp;
+    }
+    if (rideDurationSeconds is num) {
+      bikeUpdate['hardware.rideDurationSeconds'] = rideDurationSeconds.toInt();
+    }
+
+    await _db.collection('bikes').doc(bikeId).set(
+          bikeUpdate,
+          SetOptions(merge: true),
+        );
+
+    if (rideId is String && rideId.isNotEmpty && rideDurationSeconds is num) {
+      await _db.collection('rides').doc(rideId).set({
+        'rideDurationSeconds': rideDurationSeconds.toInt(),
+        'hardwareUpdatedAt': now,
+      }, SetOptions(merge: true));
+    }
+
+    await _db.collection('hardware_events').add({
+      'bikeId': bikeId,
+      'topic': topic,
+      'payload': payload,
+      'createdAt': now,
+    });
+  }
+
   Future<({String rideId, Bike bike, DateTime startTime})?> fetchActiveRide(
       String userId) async {
     final userDoc = await _db.collection('users').doc(userId).get();

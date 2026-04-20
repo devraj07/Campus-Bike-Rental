@@ -37,27 +37,17 @@ class _LoginScreenState extends State<LoginScreen>
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
-    try {
-      final email = _emailController.text.trim().toLowerCase();
-      await _authService.sendOtp(email);
-      if (!mounted) return;
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => OtpScreen(
-            email: email,
-            isRegister: _isRegisterMode,
-          ),
+    final email = _emailController.text.trim().toLowerCase();
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => OtpScreen(
+          email: email,
+          isRegister: _isRegisterMode,
+          sendOtpOnOpen: true,
         ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+      ),
+    );
   }
 
   @override
