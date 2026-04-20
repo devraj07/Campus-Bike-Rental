@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
@@ -87,8 +88,16 @@ class _ListYourBikeScreenState extends State<ListYourBikeScreen>
           }
         });
       }
-    } catch (_) {
-      if (mounted) setState(() => _loadingStations = false);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingStations = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not load stands: $e'),
+            backgroundColor: const Color(0xFFD32F2F),
+          ),
+        );
+      }
     }
   }
 
@@ -121,6 +130,11 @@ class _ListYourBikeScreenState extends State<ListYourBikeScreen>
         station: _selectedStation!,
         pricePerHour: price,
         imagePath: _selectedImageFile?.path,
+      ).timeout(
+        const Duration(seconds: 35),
+        onTimeout: () => throw TimeoutException(
+          'Submit request timed out. Check internet and try again.',
+        ),
       );
       setState(() => _pricePerHour = price);
       if (!mounted) return;
@@ -134,6 +148,14 @@ class _ListYourBikeScreenState extends State<ListYourBikeScreen>
         const SnackBar(
           content: Text('Bike submitted! Now set your Owner PIN and toggle listing.'),
           backgroundColor: Color(0xFF2E7D32),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Submit failed: $e'),
+          backgroundColor: const Color(0xFFD32F2F),
         ),
       );
     } finally {

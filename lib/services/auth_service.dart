@@ -1,7 +1,9 @@
+import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:mailer/mailer.dart';
-import 'package:mailer/smtp_server/gmail.dart';
+import 'package:mailer/smtp_server.dart';
 import '../config/app_config.dart';
 import 'session_service.dart';
 import 'user_session.dart';
@@ -37,13 +39,25 @@ class AuthService {
       'verified': false,
     });
 
-    // Send email via Gmail SMTP
-    await _sendEmail(email, otp);
+    // Send email via Gmail SMTP with timeout to avoid hanging the login UI.
+    await _sendEmail(email, otp).timeout(
+      const Duration(seconds: 20),
+      onTimeout: () => throw TimeoutException(
+        'OTP email timed out. Please check your internet and try again.',
+      ),
+    );
     return true;
   }
 
   Future<void> _sendEmail(String toEmail, String otp) async {
-    final smtpServer = gmail(AppConfig.smtpUser, AppConfig.smtpPassword);
+    final smtpServer = SmtpServer(
+      AppConfig.smtpHost,
+      port: AppConfig.smtpPort,
+      username: AppConfig.smtpUser,
+      password: AppConfig.smtpPassword,
+      ssl: true,
+      allowInsecure: false,
+    );
 
     final message = Message()
       ..from = Address(AppConfig.smtpUser, AppConfig.otpSenderName)
@@ -66,7 +80,18 @@ class AuthService {
         </div>
       ''';
 
-    await send(message, smtpServer);
+    try {
+      await send(message, smtpServer);
+    } on MailerException catch (e) {
+      final problemText = e.problems
+          .map((p) => '${p.code}: ${p.msg}')
+          .join(' | ');
+      throw Exception('SMTP error: ${e.message}. $problemText');
+    } on SocketException catch (e) {
+      throw Exception('Network error while connecting SMTP: ${e.message}');
+    } on HandshakeException catch (e) {
+      throw Exception('TLS handshake failed for SMTP: ${e.message}');
+    }
   }
 
   // ─── Verify OTP ───────────────────────────────────────────────────────────

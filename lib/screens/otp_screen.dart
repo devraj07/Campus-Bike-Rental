@@ -7,8 +7,14 @@ import 'home_screen.dart';
 class OtpScreen extends StatefulWidget {
   final String email;
   final bool isRegister;
+  final bool sendOtpOnOpen;
 
-  const OtpScreen({super.key, required this.email, this.isRegister = false});
+  const OtpScreen({
+    super.key,
+    required this.email,
+    this.isRegister = false,
+    this.sendOtpOnOpen = false,
+  });
 
   @override
   State<OtpScreen> createState() => _OtpScreenState();
@@ -27,6 +33,11 @@ class _OtpScreenState extends State<OtpScreen> {
   void initState() {
     super.initState();
     _startTimer();
+    if (widget.sendOtpOnOpen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _sendInitialOtp();
+      });
+    }
   }
 
   void _startTimer() {
@@ -50,6 +61,29 @@ class _OtpScreenState extends State<OtpScreen> {
   }
 
   String get _otp => _controllers.map((c) => c.text).join();
+
+  Future<void> _sendInitialOtp() async {
+    setState(() => _isLoading = true);
+    try {
+      await _authService.sendOtp(widget.email).timeout(
+        const Duration(seconds: 20),
+        onTimeout: () => throw TimeoutException(
+          'OTP send timed out. Please tap Resend OTP.',
+        ),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('OTP sent. Please check your inbox.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not send OTP now: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   Future<void> _verify() async {
     if (_otp.length != 6) {
@@ -90,7 +124,12 @@ class _OtpScreenState extends State<OtpScreen> {
   Future<void> _resend() async {
     setState(() => _isLoading = true);
     try {
-      await _authService.sendOtp(widget.email);
+      await _authService.sendOtp(widget.email).timeout(
+        const Duration(seconds: 20),
+        onTimeout: () => throw TimeoutException(
+          'OTP resend timed out. Please try again.',
+        ),
+      );
       if (!mounted) return;
       _startTimer();
       ScaffoldMessenger.of(context).showSnackBar(

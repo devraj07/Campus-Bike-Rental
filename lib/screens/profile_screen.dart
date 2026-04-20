@@ -4,6 +4,7 @@ import 'list_your_bike_screen.dart';
 import 'owner_rental_history_screen.dart';
 import 'login_screen.dart';
 import '../services/api_service.dart';
+import '../services/auth_service.dart';
 import '../services/user_session.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -15,6 +16,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   late Future<Map<String, dynamic>> _profileFuture;
+  final _authService = AuthService();
 
   @override
   void initState() {
@@ -233,7 +235,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   child: const Text('Cancel'),
                                 ),
                                 ElevatedButton(
-                                  onPressed: () {
+                                  onPressed: () async {
+                                    await _authService.logout();
+                                    if (!context.mounted) return;
                                     Navigator.pushAndRemoveUntil(
                                       context,
                                       MaterialPageRoute(
